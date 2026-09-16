@@ -5,7 +5,8 @@
 - Release: 0.1.0
 - Host: Ubuntu 24.04.4 LTS, Linux 6.8.0-137-generic, x86_64
 - Isolated root: /tmp/codex-setup-v1-final.7TV1JE
-- Final schema-3 lifecycle HOME: /tmp/codex-setup-v1-final.7TV1JE/home-schema3
+- Retained schema-3 compatibility HOME: /tmp/codex-setup-v1-final.7TV1JE/home-schema3
+- Current local lifecycle writer pass: schema 4 (uncommitted)
 - Managed release: 47 artifacts and 11 skills
 - Toolchain: Node.js 22.22.0, Codex CLI 0.154.0, Playwright MCP 0.0.81, pinned Chromium
 
@@ -15,11 +16,28 @@ The integrated local suite was run with:
 
     npm run check
 
-Result: 57 tests passed, zero failed, and the release manifest verified all 47
-managed artifacts plus all 11 skill directories.
+The current schema-4 writer pass was run locally with the same command.
+Result: 99 tests passed, zero failed; tracked secret hygiene was clean; and the
+release manifest verified all 47 managed artifacts plus all 11 skill
+directories. The added isolated coverage exercises explicit launcher migration,
+dry-run privacy, arbitrary live/broken absolute/relative targets including
+non-UTF-8 target bytes, failure and rollback restoration, exact two-fresh-install
+serialization, stale-lock fail-closed ABA preservation, rollback/update and
+uninstall/update toolchain-pointer serialization, pre-mutation pointer
+authentication, dry-run uninstall nonmutation, state and payload recovery drift
+refusal, rollback resource-set completeness, update carry-forward, manifest
+removal, uninstall rollback/repeat, transaction action/version and metadata
+drift, and schema-3 install/update/uninstall compatibility.
 
 Every bundled skill was also validated with the installed skill-creator
 quick_validate.py. Shell syntax checks and git diff --check passed.
+
+CI run
+[35141985035](https://github.com/ishaan-ghosh/codex-setup/actions/runs/35141985035)
+completed successfully on 2026-09-16. Its Ubuntu 24.04 Node tests, macOS 14 Node
+tests, Arch AMD64 adapter, and tracked-secret-hygiene jobs were all green. That
+run validates the pre-migration baseline commit; it does not validate this
+uncommitted schema-4 writer pass.
 
 ## Real Ubuntu lifecycle evidence
 
@@ -75,10 +93,12 @@ Those findings were fixed with retained regressions before publication.
 
 - A real CachyOS AMD64 canary is required before using this setup as the primary
   local installation.
-- macOS Apple Silicon and Arch adapter paths were not run on this Ubuntu host.
-  Their first CI jobs exposed test-fixture temporary-path portability and Arch
-  checkout-ownership issues. Bounded fixes pass locally but require a follow-up
-  push and CI rerun before those platform jobs are validated.
+- The macOS 14 and Arch AMD64 adapter jobs are green in CI run 35141985035, but
+  that run predates the schema-4 launcher migration writer pass.
+- A real macOS migration canary against the existing standalone
+  `~/.local/bin/codex` symlink is still pending. It must verify dry-run
+  non-disclosure, install and doctor, the managed launcher version, and byte-exact
+  `readlink` restoration after rollback or uninstall.
 - Hook trust through the interactive /hooks screen must be reviewed on each
   machine after first install or a hook change.
 - The authenticated-browser profile was not exercised and no login state was

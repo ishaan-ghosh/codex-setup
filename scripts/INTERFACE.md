@@ -41,9 +41,20 @@ install, update, and uninstall. The deliberately conservative TOML parser
 rejects multiline strings, multiline arrays, and arrays of tables instead of
 editing a syntax it cannot prove safe.
 
-State and transaction backups live under `$CODEX_HOME/.codex-setup`. Every
-managed resource stores its installed SHA-256 and mode. State and transactions
-also bind the release to a validated toolchain receipt and executable checksum
-inventory. Update, rollback, doctor, and uninstall refuse payload, mode, pointer,
-or toolchain drift. The lifecycle never targets authentication, sessions, memories,
+State and transaction backups live under `$CODEX_HOME/.codex-setup`.
+Byte-owned file resources store their installed SHA-256 and mode; merge
+resources store their managed paths and mode. State and transactions also bind
+the release to a validated toolchain receipt and executable checksum inventory.
+Schema 4 uses typed missing/file/symlink transaction snapshots and retains
+schema-3 read compatibility.
+
+A fresh `install --migrate-codex-launcher` may replace only an existing
+`local_bin:codex` leaf symlink. It records bounded base64 of the exact raw
+target bytes privately for rollback, update carry-forward, manifest removal, and uninstall. The flag is
+invalid with every other command, including `adopt`; without it the symlink is
+an actionable closed conflict. No link target is dereferenced, executed,
+allowlisted by shape, decoded for diagnostics, or printed.
+
+Update, rollback, doctor, and uninstall refuse payload, mode, pointer, link, or
+toolchain drift. The lifecycle never targets authentication, sessions, memories,
 logs, caches, browser profiles, or secrets.

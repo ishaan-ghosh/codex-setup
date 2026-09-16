@@ -15,7 +15,12 @@ digest. Installed state records the release, ordinary-file installed digests,
 managed configuration paths and values, modes, and the exact validated
 toolchain identity.
 It deliberately records no whole-document digest for JSON/TOML merge targets,
-so unknown values cannot influence retained managed metadata.
+so unknown values cannot influence retained managed metadata. Schema 4 adds a
+single typed displaced-symlink snapshot for an explicitly migrated
+`local_bin:codex` launcher. That private snapshot contains bounded base64 of
+exact raw target bytes, byte length, and digest; it is carried through updates
+until restored by manifest removal or uninstall. Schema-3 state and transactions remain
+readable and upgrade only when a later update commits successfully.
 
 Toolchain release directory identities include both the component-lock and npm package-lock digests, so either exact lock changing selects a distinct immutable path. Bootstrap delegates this identity entirely to the JavaScript installer.
 
@@ -27,15 +32,33 @@ three-way ownership check:
    configuration value matches its recorded structural value;
 3. the destination is not reached through a symlink.
 
+The only exception is a fresh `install --migrate-codex-launcher` for the exact
+`local_bin:codex` leaf. Its ancestors must still be real directories. The leaf
+is inspected with `lstat` and `readlink`, without dereferencing its target, then
+its exact type, raw target bytes, device, and inode are revalidated immediately
+before same-directory atomic replacement. All other leaf symlinks remain rejected.
+
 If any check fails, the command stops without overwriting the path. Install and
 update also require the current toolchain receipt to match the checkout locks.
 If bootstrap selected a new toolchain but release loading or payload preparation
 fails, update restores the toolchain recorded by the active state; dry-run never
 switches it. Transactions bind previous and current toolchain identities.
-Rollback prevalidates the previous release, checks every destination for
+Non-dry-run update and uninstall preparation plus all mutating commit and
+rollback phases
+hold a setup-local exclusive lifecycle lock. After taking that lock they
+authenticate the exact active-state snapshot used by the operation; failure
+recovery restores state only when the live file is still that snapshot or the
+exact outcome written by the current operation. Live, dead, and malformed lock
+owners all fail closed. Stale locks require manual inspection and cleanup; the
+lifecycle never removes an observed lock and therefore cannot replace a newer
+owner through a stale-observation race.
+Rollback prevalidates the previous release, requires transaction resource keys
+to equal the action-specific state-derived set, checks every destination for
 symlinks before reads and immediately before mutations, then atomically selects
-the previous toolchain before changing payload files. Uninstall removes only
-proven-owned, unchanged files.
+the previous toolchain before changing payload files. Symlink restoration uses
+a temporary link plus same-directory rename and never applies `chmod` to the
+link. Uninstall removes only proven-owned, unchanged files, except that it
+restores a recorded migrated launcher link after verifying the managed wrapper.
 
 ## Configuration model
 

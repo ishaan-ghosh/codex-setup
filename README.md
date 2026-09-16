@@ -5,8 +5,9 @@ CachyOS/Arch AMD64. It provides pinned tooling, portable guidance, specialized
 agents, reusable engineering workflows, safe profiles, memories, and an
 isolated Playwright MCP browser.
 
-This repository is pre-release. Install from a reviewed release tag rather
-than `main` once the first release exists.
+This repository is pre-release. Until the `v0.1.0` tag exists, bootstrap test
+installs from a reviewed `main` commit. After the first release, install from the
+reviewed tag rather than `main`.
 
 ## What it manages
 
@@ -29,7 +30,7 @@ The supported bootstrap is intentionally inspectable; there is no `curl | sh`
 path.
 
 ```sh
-git clone --branch v0.1.0 --depth 1 \
+git clone --branch main --depth 1 \
   git@github.com:ishaan-ghosh/codex-setup.git
 cd codex-setup
 ./bin/bootstrap
@@ -48,6 +49,25 @@ other Codex installation on `PATH`. After first install or any hook change, open
 If `CODEX_HOME` already exists, it is respected. Otherwise Codex's default
 `~/.codex` is used. Existing unknown settings are preserved; conflicting
 managed settings stop for review instead of being overwritten.
+
+`bootstrap` owns only the pinned setup runtime and Chromium installation. The
+lifecycle `install` command owns payload files and launchers. If
+`~/.local/bin/codex` is already a symlink, ordinary install stops without
+following or replacing it. Review the dry-run, then explicitly migrate that one
+launcher with:
+
+```sh
+./bin/codex-setup install --dry-run --migrate-codex-launcher
+./bin/codex-setup install --migrate-codex-launcher
+```
+
+Migration is valid only for `install` and only for the exact
+`~/.local/bin/codex` leaf. It accepts absolute, relative, live, or broken link targets without reading or
+executing them. The exact raw target bytes are retained as bounded base64 plus
+length and SHA-256 integrity metadata in mode-`0600` lifecycle state and are restored by failed install,
+initial rollback, manifest removal, or uninstall. Symlinked ancestors and every
+other managed symlink remain closed conflicts. Dry-run reports the migration
+without printing or decoding the link target bytes.
 
 ## Daily profiles
 

@@ -8,7 +8,8 @@ function usage() {
 	return `Usage: codex-setup [--dry-run] <command> [options]
 
 Commands:
-  install [--release PATH]       Install an exact checksummed release
+  install [--release PATH] [--migrate-codex-launcher]
+                                 Install an exact checksummed release
   update [--release PATH]        Update from this exact reviewed checkout
   doctor                         Verify owned resources without printing contents
   rollback [--transaction ID]    Restore a checksummed transaction backup
@@ -19,6 +20,7 @@ Commands:
 
 Global options:
   --dry-run                      Plan without filesystem writes
+  --migrate-codex-launcher       Preserve and replace an existing ~/.local/bin/codex symlink (install only)
   --help                         Show this help
 `;
 }
@@ -36,18 +38,21 @@ function parse(argv) {
 		else if (token === "--release") options.release = args.shift();
 		else if (token === "--transaction") options.transaction = args.shift();
 		else if (token === "--skip-browser") options.skipBrowser = true;
+		else if (token === "--migrate-codex-launcher") options.migrateCodexLauncher = true;
 		else if (token === "--help" || token === "-h") options.help = true;
 		else if (token.startsWith("-")) throw new Error(`unknown option: ${token}`);
 		else if (!command) command = token;
 		else throw new Error(`unexpected argument: ${token}`);
 	}
+	if (options.migrateCodexLauncher && command !== "install") throw new Error("--migrate-codex-launcher is valid only with install");
 	if (!repoRoot) repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
 	return { repoRoot: path.resolve(repoRoot), dryRun, command, options };
 }
 
 async function main() {
 	const parsed = parse(process.argv.slice(2));
-	if (parsed.options.help || !parsed.command) { process.stdout.write(usage()); return parsed.command ? 0 : 2; }
+	if (parsed.options.help) { process.stdout.write(usage()); return 0; }
+	if (!parsed.command) { process.stdout.write(usage()); return 2; }
 	const home = process.env.HOME;
 	if (!home || !path.isAbsolute(home)) throw new Error("HOME must be an absolute path");
 	const codexHome = path.resolve(process.env.CODEX_HOME || path.join(home, ".codex"));

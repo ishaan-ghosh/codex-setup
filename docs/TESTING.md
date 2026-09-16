@@ -6,7 +6,17 @@
    platform detection, checksums, and redaction.
 2. Contract tests install into a temporary `CODEX_HOME` and data root, repeat
    the install for idempotence, mutate one managed file to verify conflict
-   handling, then exercise rollback and uninstall.
+   handling, then exercise rollback and uninstall. Launcher-migration contracts
+   cover absent launchers, explicit consent, dry-run privacy, absolute/relative
+   and live/broken targets, no-dereference behavior, unrelated and ancestor
+   symlinks, failure restoration, update carry-forward, manifest removal,
+   uninstall rollback, repeated uninstall, metadata drift, transaction
+   action/version relationships, exact rollback resource-set completeness,
+   two-fresh-install serialization, stale-lock fail-closed ABA preservation,
+   rollback/update and uninstall/update toolchain-pointer serialization,
+   pre-mutation pointer authentication, state and payload recovery drift
+   refusal, dry-run uninstall nonmutation, non-UTF-8 target bytes, and schema-3
+   install/update/uninstall rollback compatibility.
 3. Toolchain tests verify exact Node, Codex, Playwright MCP, and Chromium
    identities without changing the host toolchain. Executed regressions tamper
    with runtime, package, and platform-native Codex executables and prove
@@ -51,6 +61,14 @@ site.
 ## Release validation boundary
 
 CI runs unit, contract, manifest, skill-frontmatter, and secret-hygiene checks only. It does not download the managed Node/Codex/Playwright toolchain, launch Chromium, or exercise a real browser session. The release gate therefore requires the separate CachyOS AMD64 canary below (and an equivalent Ubuntu/macOS check when practical); its redacted report is the evidence for real toolchain and browser behavior.
+
+## macOS launcher-migration canary
+
+On a Mac with the current standalone Codex link at `~/.local/bin/codex`, retain
+its exact raw link-target bytes privately, run migration dry-run, install with
+`--migrate-codex-launcher`, run doctor and the managed launcher version check,
+then exercise uninstall or initial rollback and confirm `readlink` returns the exact original bytes. This real-home canary remains required even when the
+isolated cross-platform regression suite is green.
 
 ## CachyOS first-use canary
 
