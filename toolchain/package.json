@@ -1,0 +1,10 @@
+{
+  "name": "codex-setup-toolchain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned runtime packages installed into the codex-setup-owned toolchain.",
+  "dependencies": {
+    "@openai/codex": "0.154.0",
+    "@playwright/mcp": "0.0.81"
+  }
+}

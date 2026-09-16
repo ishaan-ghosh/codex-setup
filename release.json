@@ -1,0 +1,337 @@
+{
+  "schema": 1,
+  "version": "0.1.0",
+  "artifacts": [
+    {
+      "source": "payload/agents/audit_verifier.toml",
+      "target_root": "codex_home",
+      "target": "agents/audit_verifier.toml",
+      "mode": "0644",
+      "sha256": "49741f4abc8d105b036a9586d2010de38a696b07f5ccb96c7258e0e5ee788303"
+    },
+    {
+      "source": "payload/agents/complex_worker.toml",
+      "target_root": "codex_home",
+      "target": "agents/complex_worker.toml",
+      "mode": "0644",
+      "sha256": "ed129f5c603e42d7061a6cf29c3ccfc9bbbe05bc3ea6b91a2af97df31595004c"
+    },
+    {
+      "source": "payload/agents/github_researcher.toml",
+      "target_root": "codex_home",
+      "target": "agents/github_researcher.toml",
+      "mode": "0644",
+      "sha256": "8fb00a52ff70c2cedb239eac312258552d464a012861bb4685af5d357f9d3b25"
+    },
+    {
+      "source": "payload/agents/mechanical_worker.toml",
+      "target_root": "codex_home",
+      "target": "agents/mechanical_worker.toml",
+      "mode": "0644",
+      "sha256": "71a39b708e04b533615741ffdbde57a325f82a3cf0fd5a50ad54497ed45aa794"
+    },
+    {
+      "source": "payload/agents/repo_explorer.toml",
+      "target_root": "codex_home",
+      "target": "agents/repo_explorer.toml",
+      "mode": "0644",
+      "sha256": "6942a5376beb2fbb9784dd33309e1ea3b56ef23e0d8abb334a76000931ce06af"
+    },
+    {
+      "source": "payload/agents/reviewer.toml",
+      "target_root": "codex_home",
+      "target": "agents/reviewer.toml",
+      "mode": "0644",
+      "sha256": "065aa8d1a09fbae3b4d3ef2e6b721030a7ff4557ef65b60cd44507e1880bcc57"
+    },
+    {
+      "source": "payload/agents/web_researcher.toml",
+      "target_root": "codex_home",
+      "target": "agents/web_researcher.toml",
+      "mode": "0644",
+      "sha256": "43a17fd4277b55b2ea84cde7fc2cd0be7a11163b830734c934045da521e5c670"
+    },
+    {
+      "source": "payload/AGENTS.md",
+      "target_root": "codex_home",
+      "target": "AGENTS.md",
+      "mode": "0644",
+      "sha256": "f08cdd59d7898a393fdbc5a9686f2aad5c3aeec7c0aa61d9d0db94705feb826d"
+    },
+    {
+      "source": "payload/bin/codex",
+      "target_root": "local_bin",
+      "target": "codex",
+      "mode": "0755",
+      "sha256": "49db63c9b46b24f72349482fbfeccd68085bbc2a4ca6caa91cbe66b3852b485f"
+    },
+    {
+      "source": "payload/bin/codex-playwright-mcp",
+      "target_root": "local_bin",
+      "target": "codex-playwright-mcp",
+      "mode": "0755",
+      "sha256": "a9c664e6339bdf086bf11d97550a78c82234a3a6871ebe29feaf4ad422208e93"
+    },
+    {
+      "source": "payload/bin/codex-read-policy",
+      "target_root": "local_bin",
+      "target": "codex-read-policy",
+      "mode": "0755",
+      "sha256": "ebee7f5fc832b6c43c0ab82d254bfcdf41c02393fb5b7e640805c764056fe05d"
+    },
+    {
+      "source": "payload/config/managed.toml",
+      "target_root": "codex_home",
+      "target": "config.toml",
+      "kind": "toml-merge",
+      "mode": "0600",
+      "sha256": "aae9e75dae07b97cc5409d6d20b84c45ff93fac16e81301193374407d26c63fc"
+    },
+    {
+      "source": "payload/hooks/hooks.json",
+      "target_root": "codex_home",
+      "target": "hooks.json",
+      "kind": "json-merge",
+      "mode": "0600",
+      "sha256": "6f99956333adddc7d9993c6d9b8b3a8ef16b078dca95344727f2f81b983e3b4c"
+    },
+    {
+      "source": "payload/hooks/read-policy.mjs",
+      "target_root": "codex_home",
+      "target": "hooks/codex-setup-read-policy.mjs",
+      "mode": "0755",
+      "sha256": "094794bf41e6c36f164edb1bcb60648535f130578a2cd1b7fc21641d4a6e2259"
+    },
+    {
+      "source": "payload/profiles/authenticated-browser.config.toml",
+      "target_root": "codex_home",
+      "target": "authenticated-browser.config.toml",
+      "mode": "0600",
+      "sha256": "d723f4894e7860339c4a78027adfe0f27adf15b51c868d7c0768566ab939b29e"
+    },
+    {
+      "source": "payload/profiles/dev-net.config.toml",
+      "target_root": "codex_home",
+      "target": "dev-net.config.toml",
+      "mode": "0600",
+      "sha256": "7f9b2f3200e11fae254d3e6fb718290568071db9321b0ed52caf7dcb2ecd4440"
+    },
+    {
+      "source": "payload/profiles/dev.config.toml",
+      "target_root": "codex_home",
+      "target": "dev.config.toml",
+      "mode": "0600",
+      "sha256": "de0437c2350355252988244d12a09a40a8316829bf488d923c8fa4dcc53e54de"
+    },
+    {
+      "source": "payload/profiles/review.config.toml",
+      "target_root": "codex_home",
+      "target": "review.config.toml",
+      "mode": "0600",
+      "sha256": "f8f7769834d6ef4b82974923f63dc1b37ea9508848998de0a4be75515bf85ac9"
+    },
+    {
+      "source": "payload/skills/codex-audit-flow/references/audit-contract.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-audit-flow/references/audit-contract.md",
+      "mode": "0644",
+      "sha256": "baedce76a4ceef7df26f71e3215dea53c66a42983d4081868e046b85ee89f53d"
+    },
+    {
+      "source": "payload/skills/codex-audit-flow/references/audit-metadata.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-audit-flow/references/audit-metadata.md",
+      "mode": "0644",
+      "sha256": "7feb49825e2ca32d791356cfbf7961f8fba09f2409d84379a5f05201556547ae"
+    },
+    {
+      "source": "payload/skills/codex-audit-flow/references/findings-schema.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-audit-flow/references/findings-schema.md",
+      "mode": "0644",
+      "sha256": "8b5a4d7203abd50c88e7fe8d8315b6ba0d16354a4b629ba7a7555e51e47827c5"
+    },
+    {
+      "source": "payload/skills/codex-audit-flow/references/profile-schema.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-audit-flow/references/profile-schema.md",
+      "mode": "0644",
+      "sha256": "eb95acf0406600e67d1d68575f56b7772f8d5f191b853da7f755ced65f394039"
+    },
+    {
+      "source": "payload/skills/codex-audit-flow/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-audit-flow/SKILL.md",
+      "mode": "0644",
+      "sha256": "22c7c516f86b915e9bff752b51c0796bb99b7978a925ec1443bf9afcf6b509fd"
+    },
+    {
+      "source": "payload/skills/codex-diagnose/references/hitl-loop.template.sh",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-diagnose/references/hitl-loop.template.sh",
+      "mode": "0644",
+      "sha256": "b2932630950e5210075bcd6f850e5accf30c101c5367b29eac3a29b4dd8084c8"
+    },
+    {
+      "source": "payload/skills/codex-diagnose/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-diagnose/SKILL.md",
+      "mode": "0644",
+      "sha256": "377bd3e17d74bbac2b4e13dc3a71e037e820239375a630221774462f41f0f53a"
+    },
+    {
+      "source": "payload/skills/codex-grill-with-docs/references/ADR-FORMAT.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-grill-with-docs/references/ADR-FORMAT.md",
+      "mode": "0644",
+      "sha256": "f1f36cd3f8d3b6474ddd5855da4e233bfc4ae1a1c5024909ccf11871819a41b2"
+    },
+    {
+      "source": "payload/skills/codex-grill-with-docs/references/CONTEXT-FORMAT.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-grill-with-docs/references/CONTEXT-FORMAT.md",
+      "mode": "0644",
+      "sha256": "8f6baaa3b1c91644bd7c600196b1aee781d5f525c7c345db8cdfbfb368329a05"
+    },
+    {
+      "source": "payload/skills/codex-grill-with-docs/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-grill-with-docs/SKILL.md",
+      "mode": "0644",
+      "sha256": "22710b55dc8c36b769374d453f8caea94573eaf3ada745a211b2e683fed0c107"
+    },
+    {
+      "source": "payload/skills/codex-improve-architecture/references/DEEPENING.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-improve-architecture/references/DEEPENING.md",
+      "mode": "0644",
+      "sha256": "9577485f4fc32c0267639a9151bb41c8af0f8f6086e4bf8b84d5b236e30604e9"
+    },
+    {
+      "source": "payload/skills/codex-improve-architecture/references/INTERFACE-DESIGN.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-improve-architecture/references/INTERFACE-DESIGN.md",
+      "mode": "0644",
+      "sha256": "678c3e34f1339015053212b3316bf0b676c70aa251050a0613667d4e755fb35e"
+    },
+    {
+      "source": "payload/skills/codex-improve-architecture/references/LANGUAGE.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-improve-architecture/references/LANGUAGE.md",
+      "mode": "0644",
+      "sha256": "6feca2140439c54a774749e8367f18350899ff69c777144ed2248cd4407949fa"
+    },
+    {
+      "source": "payload/skills/codex-improve-architecture/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-improve-architecture/SKILL.md",
+      "mode": "0644",
+      "sha256": "77915b6deac6c750e4f1075936837caa73d4d0986813be9a3a17054b78c202a3"
+    },
+    {
+      "source": "payload/skills/codex-tdd/references/deep-modules.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-tdd/references/deep-modules.md",
+      "mode": "0644",
+      "sha256": "f2123700bf953db1740625686c75bdd145efd486357c47c6818c869fee657a32"
+    },
+    {
+      "source": "payload/skills/codex-tdd/references/interface-design.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-tdd/references/interface-design.md",
+      "mode": "0644",
+      "sha256": "764c5ff0e3fa6b4ab7095eb65ccc7201e090baf19fa16051dfdb72c06d27417d"
+    },
+    {
+      "source": "payload/skills/codex-tdd/references/mocking.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-tdd/references/mocking.md",
+      "mode": "0644",
+      "sha256": "3ceb807fdf4a47d6a93d4d9a891e5ba6d362a6247bd08adc451feebfc17361ef"
+    },
+    {
+      "source": "payload/skills/codex-tdd/references/refactoring.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-tdd/references/refactoring.md",
+      "mode": "0644",
+      "sha256": "54fced22dd1911b7094c3fe7979b7c1a40d40be307482c4adf7dc0588f27d6cc"
+    },
+    {
+      "source": "payload/skills/codex-tdd/references/tests.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-tdd/references/tests.md",
+      "mode": "0644",
+      "sha256": "e12182f5c4c6a844b7c6ab4b8d2623b642aaaae5460fe58ed087efd4f3d5fb8a"
+    },
+    {
+      "source": "payload/skills/codex-tdd/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-tdd/SKILL.md",
+      "mode": "0644",
+      "sha256": "c844f85dff2b673685302f2f515bdcd4cab482d8306a90afa36fb3857097e242"
+    },
+    {
+      "source": "payload/skills/codex-to-prd/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/codex-to-prd/SKILL.md",
+      "mode": "0644",
+      "sha256": "19b814a26249c429d908322894095af9e6f4b43956125c1c5498e8e2c73701af"
+    },
+    {
+      "source": "payload/skills/superpowers-brainstorming/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-brainstorming/SKILL.md",
+      "mode": "0644",
+      "sha256": "5b82414d92840c8bdf9b323835754e372fee314cd187179a0191d771a19e51ae"
+    },
+    {
+      "source": "payload/skills/superpowers-brainstorming/spec-document-reviewer-prompt.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-brainstorming/spec-document-reviewer-prompt.md",
+      "mode": "0644",
+      "sha256": "b2eb1914c4ed5dfb2fcffa3fefebc553ea7acdce5c23ece11b12349154f5cf5c"
+    },
+    {
+      "source": "payload/skills/superpowers-dispatching-parallel-agents/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-dispatching-parallel-agents/SKILL.md",
+      "mode": "0644",
+      "sha256": "b3f3431cfa70f9932468aa947957e3f979245be5c3223d726490c6416b2b77a5"
+    },
+    {
+      "source": "payload/skills/superpowers-LICENSE",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-LICENSE",
+      "mode": "0644",
+      "sha256": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400"
+    },
+    {
+      "source": "payload/skills/superpowers-receiving-code-review/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-receiving-code-review/SKILL.md",
+      "mode": "0644",
+      "sha256": "2cab0dafa835bbd5c4562f005bbee56a66c0263916862d53c27030db4acf4833"
+    },
+    {
+      "source": "payload/skills/superpowers-verification-before-completion/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-verification-before-completion/SKILL.md",
+      "mode": "0644",
+      "sha256": "9ea2d27b834b2ba208ff7c5409d28cf5d2f95675ea419261aa57b2dbdf51321c"
+    },
+    {
+      "source": "payload/skills/superpowers-writing-plans/plan-document-reviewer-prompt.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-writing-plans/plan-document-reviewer-prompt.md",
+      "mode": "0644",
+      "sha256": "c67faa11f5d1775ce8b811040a6ac10de02788716ad2bf1ff599f0f6c31bb531"
+    },
+    {
+      "source": "payload/skills/superpowers-writing-plans/SKILL.md",
+      "target_root": "user_home",
+      "target": ".agents/skills/superpowers-writing-plans/SKILL.md",
+      "mode": "0644",
+      "sha256": "6b1175e37f7a09150a385469026aac38c3eae716d7211e1c122b91773c4add99"
+    }
+  ]
+}

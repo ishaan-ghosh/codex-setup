@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+
+case ${HOME-} in
+  /*) ;;
+  *) echo "codex-setup: HOME must be an absolute path" >&2; exit 2 ;;
+esac
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+REPO_ROOT=${CODEX_SETUP_ROOT:-$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd -P)}
+case ${CODEX_SETUP_DATA_HOME-} in
+  /*) DATA_ROOT=$CODEX_SETUP_DATA_HOME ;;
+  "")
+    case ${XDG_DATA_HOME-} in
+      /*) DATA_ROOT=$XDG_DATA_HOME/codex-setup ;;
+      "") DATA_ROOT=$HOME/.local/share/codex-setup ;;
+      *) echo "codex-setup: XDG_DATA_HOME must be absolute when set" >&2; exit 2 ;;
+    esac
+    ;;
+  *) echo "codex-setup: CODEX_SETUP_DATA_HOME must be absolute when set" >&2; exit 2 ;;
+esac
+
+TOOLCHAIN_ROOT=${CODEX_SETUP_TOOLCHAIN_ROOT:-$DATA_ROOT/toolchains}
+MANAGED_NODE=$TOOLCHAIN_ROOT/current/node/bin/node
+export PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$TOOLCHAIN_ROOT/current/browsers}
+
+if [ -n "${CODEX_SETUP_NODE-}" ]; then
+  NODE=$CODEX_SETUP_NODE
+elif [ -x "$MANAGED_NODE" ]; then
+  NODE=$MANAGED_NODE
+elif command -v node >/dev/null 2>&1; then
+  NODE=$(command -v node)
+else
+  echo "codex-setup: Node.js is required to run the lifecycle manager." >&2
+  echo "No setup-owned runtime exists at $MANAGED_NODE." >&2
+  echo "Run bin/bootstrap, or set CODEX_SETUP_NODE to a reviewed Node.js executable." >&2
+  exit 1
+fi
+
+exec "$NODE" "$REPO_ROOT/scripts/codex-setup.mjs" --repo-root "$REPO_ROOT" "$@"

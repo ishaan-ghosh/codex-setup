@@ -1,0 +1,18 @@
+{
+  "name": "codex-setup",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reproducible Codex CLI setup with managed skills, agents, profiles, and Playwright MCP.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:core": "node --test tests/core/*.test.mjs",
+    "generate:release": "node scripts/release-manifest.mjs --write",
+    "check": "npm test && npm run check:secrets && node scripts/check-release.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs"
+  },
+  "engines": {
+    "node": ">=22.22.0 <23"
+  }
+}

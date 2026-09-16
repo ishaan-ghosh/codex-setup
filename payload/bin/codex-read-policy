@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+codex_home=${CODEX_HOME:-"$HOME/.codex"}
+script=$codex_home/hooks/codex-setup-read-policy.mjs
+case ${CODEX_SETUP_DATA_HOME-} in
+  /*) data_root=$CODEX_SETUP_DATA_HOME ;;
+  "")
+    case ${XDG_DATA_HOME-} in
+      /*) data_root=$XDG_DATA_HOME/codex-setup ;;
+      "") data_root=$HOME/.local/share/codex-setup ;;
+      *) printf '%s\n' "codex-read-policy: XDG_DATA_HOME must be absolute when set" >&2; exit 64 ;;
+    esac
+    ;;
+  *) printf '%s\n' "codex-read-policy: CODEX_SETUP_DATA_HOME must be absolute when set" >&2; exit 64 ;;
+esac
+node_bin=${CODEX_NODE_BIN:-$data_root/toolchains/current/node/bin/node}
+
+if [ ! -x "$node_bin" ]; then
+  node_bin=node
+fi
+
+exec "$node_bin" "$script"

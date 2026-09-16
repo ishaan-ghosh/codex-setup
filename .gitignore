@@ -1,0 +1,12 @@
+node_modules/
+.DS_Store
+coverage/
+.codex-setup-test/
+.playwright-mcp/
+playwright-report/
+test-results/
+blob-report/
+playwright/.auth/
+*.log
+.agent/local/
+.audit/local/

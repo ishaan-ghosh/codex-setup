@@ -1,0 +1,31 @@
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+model = "gpt-6-astra"
+model_reasoning_effort = "high"
+plan_mode_reasoning_effort = "xhigh"
+review_model = "gpt-5.6-sol"
+check_for_update_on_startup = false
+
+[features]
+hooks = true
+memories = true
+multi_agent = true
+
+[memories]
+generate_memories = true
+use_memories = true
+disable_on_external_context = true
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "medium"
+
+[mcp_servers.playwright]
+enabled = true
+required = false
+command = "codex-playwright-mcp"
+args = ["local-test"]
+startup_timeout_sec = 30.0
+tool_timeout_sec = 120.0

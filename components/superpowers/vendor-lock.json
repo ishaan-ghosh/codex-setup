@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "version": "6.3.0",
+  "commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+  "archiveSha256": "7c3ae7db406f8d92cf55329aa9e9a41e53f6cef00bdb68e1325713be97ef5d7c",
+  "resources": [
+    {
+      "target": "superpowers-brainstorming/SKILL.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/brainstorming/SKILL.md",
+      "sourceSha256": "74edf03ea6d24ef53db48677b93558d14a979bdf052ca3f57ecdca0c66791608",
+      "sha256": "5b82414d92840c8bdf9b323835754e372fee314cd187179a0191d771a19e51ae",
+      "mode": 436
+    },
+    {
+      "target": "superpowers-brainstorming/spec-document-reviewer-prompt.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/brainstorming/spec-document-reviewer-prompt.md",
+      "sourceSha256": "95a0a195de9d984be2fffa95bab16fc8c563bc296a9cfc5e9c29cb3ece0d7457",
+      "sha256": "b2eb1914c4ed5dfb2fcffa3fefebc553ea7acdce5c23ece11b12349154f5cf5c",
+      "mode": 436
+    },
+    {
+      "target": "superpowers-dispatching-parallel-agents/SKILL.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/dispatching-parallel-agents/SKILL.md",
+      "sourceSha256": "1968923066f3b707eb01d1992cdf4c42284c3855f70253b9cd5000ff45fca13c",
+      "sha256": "b3f3431cfa70f9932468aa947957e3f979245be5c3223d726490c6416b2b77a5",
+      "mode": 436
+    },
+    {
+      "target": "superpowers-LICENSE",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/LICENSE",
+      "sourceSha256": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+      "sha256": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+      "mode": 420
+    },
+    {
+      "target": "superpowers-receiving-code-review/SKILL.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/receiving-code-review/SKILL.md",
+      "sourceSha256": "091df1629510af1b92fc4abd6f96732ebedb4cb2c0f3457e8f2740b0504a2438",
+      "sha256": "2cab0dafa835bbd5c4562f005bbee56a66c0263916862d53c27030db4acf4833",
+      "mode": 436
+    },
+    {
+      "target": "superpowers-verification-before-completion/SKILL.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/verification-before-completion/SKILL.md",
+      "sourceSha256": "2befe7fc55bcadaa3d97dd9e8efeb633d2561c0ebe74c5a8b17c4d9e7e4520b3",
+      "sha256": "9ea2d27b834b2ba208ff7c5409d28cf5d2f95675ea419261aa57b2dbdf51321c",
+      "mode": 436
+    },
+    {
+      "target": "superpowers-writing-plans/plan-document-reviewer-prompt.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/writing-plans/plan-document-reviewer-prompt.md",
+      "sourceSha256": "aa728b96aad603c8be28875a4305637f6c984aa81ffcadcb13e743202fa2a0c7",
+      "sha256": "c67faa11f5d1775ce8b811040a6ac10de02788716ad2bf1ff599f0f6c31bb531",
+      "mode": 436
+    },
+    {
+      "target": "superpowers-writing-plans/SKILL.md",
+      "source": "superpowers-b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/writing-plans/SKILL.md",
+      "sourceSha256": "48508f44bbfd7d24b029fbf3a314f3cd14c9615599059366e922f47b8dc08cf2",
+      "sha256": "6b1175e37f7a09150a385469026aac38c3eae716d7211e1c122b91773c4add99",
+      "mode": 436
+    }
+  ],
+  "overlay": [
+    "Namespace each SKILL.md name with superpowers-.",
+    "Replace Claude-specific and unavailable skill routing with Astra, Luna, and Sol guidance.",
+    "Keep deferred worktree and plan-execution skills disabled; route their responsibilities through repository policy and the parent orchestrator.",
+    "Require separate user approval before external GitHub review replies.",
+    "Remove the upstream brainstorming web companion and retain text-only brainstorming for Codex."
+  ]
+}

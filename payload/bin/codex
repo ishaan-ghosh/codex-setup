@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+case ${CODEX_SETUP_DATA_HOME-} in
+  /*) data_root=$CODEX_SETUP_DATA_HOME ;;
+  "")
+    case ${XDG_DATA_HOME-} in
+      /*) data_root=$XDG_DATA_HOME/codex-setup ;;
+      "") data_root=$HOME/.local/share/codex-setup ;;
+      *) printf '%s\n' "codex: XDG_DATA_HOME must be absolute when set" >&2; exit 64 ;;
+    esac
+    ;;
+  *) printf '%s\n' "codex: CODEX_SETUP_DATA_HOME must be absolute when set" >&2; exit 64 ;;
+esac
+
+toolchain=$data_root/toolchains/current
+node_bin=$toolchain/node/bin/node
+codex_cli=$toolchain/app/node_modules/@openai/codex/bin/codex.js
+
+if [ ! -x "$node_bin" ] || [ ! -f "$codex_cli" ]; then
+  printf '%s\n' "codex: managed toolchain is missing; run './bin/bootstrap'" >&2
+  exit 69
+fi
+
+exec "$node_bin" "$codex_cli" "$@"

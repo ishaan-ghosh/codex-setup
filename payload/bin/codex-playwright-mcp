@@ -1,0 +1,105 @@
+#!/bin/sh
+set -eu
+
+mode=${1:-local-test}
+if [ "$#" -gt 1 ]; then
+  printf '%s\n' "codex-playwright-mcp: additional arguments are not accepted; choose a named mode" >&2
+  exit 64
+fi
+
+case "$mode" in
+  local-test|web-research|authenticated-browser) ;;
+  *)
+    printf '%s\n' "usage: codex-playwright-mcp {local-test|web-research|authenticated-browser}" >&2
+    exit 64
+    ;;
+esac
+
+case ${CODEX_SETUP_DATA_HOME-} in
+  /*) data_root=$CODEX_SETUP_DATA_HOME ;;
+  "")
+    case ${XDG_DATA_HOME-} in
+      /*) data_root=$XDG_DATA_HOME/codex-setup ;;
+      "") data_root=$HOME/.local/share/codex-setup ;;
+      *) printf '%s\n' "codex-playwright-mcp: XDG_DATA_HOME must be absolute when set" >&2; exit 64 ;;
+    esac
+    ;;
+  *) printf '%s\n' "codex-playwright-mcp: CODEX_SETUP_DATA_HOME must be absolute when set" >&2; exit 64 ;;
+esac
+
+die_path() {
+  printf 'codex-playwright-mcp: unsafe path: %s\n' "$1" >&2
+  exit 70
+}
+
+# Reject symlink components before creating or passing any output/profile path.
+# The managed toolchain's current link is resolved separately by the installer;
+# this check applies only to writable browser state.
+assert_no_symlink_components() {
+  target=$1
+  remainder=${target#/}
+  current=/
+  while [ -n "$remainder" ]; do
+    component=${remainder%%/*}
+    if [ "$remainder" = "$component" ]; then
+      remainder=
+    else
+      remainder=${remainder#*/}
+    fi
+    [ -n "$component" ] || continue
+    current=${current%/}/$component
+    [ -L "$current" ] && die_path "$target"
+  done
+  return 0
+}
+
+ensure_private_dir() {
+  target=$1
+  assert_no_symlink_components "$target"
+  mkdir -p "$target"
+  assert_no_symlink_components "$target"
+  [ -d "$target" ] || die_path "$target"
+  chmod 700 "$target"
+}
+
+toolchain_root=$data_root/toolchains/current
+node_bin=$toolchain_root/node/bin/node
+mcp_cli=$toolchain_root/app/node_modules/@playwright/mcp/cli.js
+export PLAYWRIGHT_BROWSERS_PATH=$toolchain_root/browsers
+
+if [ ! -x "$node_bin" ] || [ ! -f "$mcp_cli" ]; then
+  printf '%s\n' "codex-playwright-mcp: managed toolchain is missing; run 'codex-setup install-toolchain'" >&2
+  exit 69
+fi
+output_root=$data_root/browser-output
+mode_output_root=$output_root/$mode
+output_dir=$mode_output_root/$$
+ensure_private_dir "$output_root"
+ensure_private_dir "$mode_output_root"
+ensure_private_dir "$output_dir"
+
+case "$mode" in
+  local-test)
+    # Trusted loopback-fixture mode. The origin allowlist guards direct navigation only;
+    # pinned MCP redirects can escape it, so this is not a network boundary.
+    set -- --headless --isolated --block-service-workers --host 127.0.0.1 \
+      --allowed-hosts localhost,127.0.0.1 --allowed-origins "http://localhost:*;http://127.0.0.1:*" --output-dir "$output_dir" --output-max-size 52428800
+    ;;
+  web-research)
+    # Network-capable research; only MCP transport is bound to loopback.
+    set -- --headless --isolated --block-service-workers --host 127.0.0.1 \
+      --allowed-hosts '*' --output-dir "$output_dir" --output-max-size 52428800
+    ;;
+  authenticated-browser)
+    profile_root=$data_root/browser-profiles
+    profile_dir=$profile_root/authenticated
+    ensure_private_dir "$profile_root"
+    ensure_private_dir "$profile_dir"
+    # Authenticated browsing is explicit and persistent. MCP transport is loopback-only,
+    # while browser navigation is intentionally network-capable.
+    set -- --headless --user-data-dir "$profile_dir" --host 127.0.0.1 \
+      --allowed-hosts '*' --output-dir "$output_dir" --output-max-size 52428800
+    ;;
+esac
+
+exec "$node_bin" "$mcp_cli" "$@"

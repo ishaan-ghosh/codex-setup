@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "generated_at": "2026-09-16",
+  "components": {
+    "node": {
+      "version": "22.22.0",
+      "base_url": "https://nodejs.org/dist/v22.22.0",
+      "artifacts": {
+        "darwin-arm64": {
+          "file": "node-v22.22.0-darwin-arm64.tar.gz",
+          "sha256": "5ed4db0fcf1eaf84d91ad12462631d73bf4576c1377e192d222e48026a902640"
+        },
+        "linux-x64": {
+          "file": "node-v22.22.0-linux-x64.tar.gz",
+          "sha256": "c33c39ed9c80deddde77c960d00119918b9e352426fd604ba41638d6526a4744"
+        }
+      }
+    },
+    "codex": {
+      "package": "@openai/codex",
+      "version": "0.154.0",
+      "integrity": "sha512-FV/x1OHXYv/ifjf3mXj9ThTTAWcUZN6cGIRQRhRxkKNOPuImu1WW0c8ev1vUkE9XGH90dEnYG1tBjIkxRikg0w=="
+    },
+    "playwright_mcp": {
+      "package": "@playwright/mcp",
+      "version": "0.0.81",
+      "integrity": "sha512-c4eVex1nS53IzLHlwAm0J9ZISDTvA7RndFX8oVcQOrmvIrKSkByazpq79lZHWJuWTB7Gpk0sLBQoRepyIgmneA==",
+      "browser": "chromium"
+    },
+    "superpowers": {
+      "version": "6.3.0",
+      "commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+      "archive": "https://github.com/obra/superpowers/archive/b36e0829c6d0140e93cfef2ca599b1b07d4a7797.tar.gz",
+      "sha256": "7c3ae7db406f8d92cf55329aa9e9a41e53f6cef00bdb68e1325713be97ef5d7c",
+      "license": "MIT",
+      "enable_upstream_skills": [
+        "brainstorming",
+        "writing-plans",
+        "verification-before-completion",
+        "dispatching-parallel-agents",
+        "receiving-code-review"
+      ],
+      "adapt_before_enable": [
+        "subagent-driven-development",
+        "using-git-worktrees",
+        "executing-plans",
+        "finishing-a-development-branch"
+      ],
+      "disabled_conflicts": [
+        "test-driven-development",
+        "systematic-debugging",
+        "requesting-code-review",
+        "writing-skills",
+        "using-superpowers"
+      ]
+    }
+  }
+}
