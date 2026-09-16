@@ -8,7 +8,7 @@ function usage() {
 	return `Usage: codex-setup [--dry-run] <command> [options]
 
 Commands:
-  install [--release PATH] [--migrate-codex-launcher]
+  install [--release PATH] [--migrate-codex-launcher] [--migrate-managed-config]
                                  Install an exact checksummed release
   update [--release PATH]        Update from this exact reviewed checkout
   doctor                         Verify owned resources without printing contents
@@ -21,6 +21,7 @@ Commands:
 Global options:
   --dry-run                      Plan without filesystem writes
   --migrate-codex-launcher       Preserve and replace an existing ~/.local/bin/codex symlink (install only)
+  --migrate-managed-config       Preserve and replace allowlisted managed config conflicts (install only)
   --help                         Show this help
 `;
 }
@@ -39,6 +40,7 @@ function parse(argv) {
 		else if (token === "--transaction") options.transaction = args.shift();
 		else if (token === "--skip-browser") options.skipBrowser = true;
 		else if (token === "--migrate-codex-launcher") options.migrateCodexLauncher = true;
+		else if (token === "--migrate-managed-config") options.migrateManagedConfig = true;
 		else if (token === "--help" || token === "-h") options.help = true;
 		else if (token.startsWith("-")) throw new Error(`unknown option: ${token}`);
 		else if (!command) command = token;
@@ -46,6 +48,7 @@ function parse(argv) {
 	}
 	if (options.migrateCodexLauncher && command !== "install") throw new Error("--migrate-codex-launcher is valid only with install");
 	if (!repoRoot) repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
+	if (options.migrateManagedConfig && command !== "install") throw new Error("--migrate-managed-config is valid only with install");
 	return { repoRoot: path.resolve(repoRoot), dryRun, command, options };
 }
 

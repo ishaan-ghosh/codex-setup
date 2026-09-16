@@ -122,14 +122,31 @@ async function writeLauncherSymlink(h, linkText) {
 
 function snapshotLinkBytes(snapshot) {
 	return Buffer.from(snapshot.linkBase64, "base64");
+
+}
+async function setJsonMerge(h, value) {
+	const contents = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+	await fs.writeFile(path.join(h.repo, "payload", "config.json"), contents);
+	const releasePath = path.join(h.repo, "release.json");
+	const release = JSON.parse(await fs.readFile(releasePath));
+	const artifact = release.artifacts.find((entry) => entry.target === "config.json");
+	artifact.sha256 = digest(contents);
+	await fs.writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`);
 }
 
 function snapshotLinkText(snapshot) {
 	return snapshotLinkBytes(snapshot).toString("utf8");
 }
 
+function convertStateToLegacySchema(state, schema) {
+	state.schema = schema;
+	for (const resource of state.resources.filter((entry) => entry.kind !== "file")) delete resource.displacedValues;
+	return state;
+}
+
 function convertTransactionToSchema3(transaction) {
 	transaction.schema = 3;
+	for (const record of transaction.resources.filter((entry) => entry.kind !== "file")) delete record.displacedValues;
 	for (const record of transaction.resources.filter((entry) => entry.kind === "file")) {
 		record.beforeSha256 = record.beforeSnapshot.type === "missing" ? null : record.beforeSnapshot.sha256;
 		record.beforeMode = record.beforeSnapshot.type === "missing" ? null : record.beforeSnapshot.mode;
@@ -645,7 +662,7 @@ test("Codex launcher migration is explicit, private, and dry-run safe", async (t
 	assert.equal((await fs.lstat(launcher)).isFile(), true);
 	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 	const state = JSON.parse(await fs.readFile(statePath));
-	assert.equal(state.schema, 4);
+	assert.equal(state.schema, 5);
 	const resource = state.resources.find((entry) => entry.targetRoot === "local_bin" && entry.target === "codex");
 	assert.equal(snapshotLinkText(resource.displacedSymlink), privateTarget);
 	assert.equal((await fs.stat(statePath)).mode & 0o777, 0o600);
@@ -739,7 +756,7 @@ test("launcher origin survives update, uninstall rollback, and repeated uninstal
 	h.lifecycle.repoRoot = next.repo;
 	await h.lifecycle.update();
 	let state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
-	assert.equal(state.schema, 4);
+	assert.equal(state.schema, 5);
 	assert.equal(snapshotLinkText(state.resources.find((entry) => entry.targetRoot === "local_bin" && entry.target === "codex").displacedSymlink), linkText);
 
 	await h.lifecycle.uninstall();
@@ -812,9 +829,14 @@ test("schema-4 launcher metadata rejects drift and malformed combinations withou
 		const state = JSON.parse(await fs.readFile(statePath));
 		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
 		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		convertStateToLegacySchema(state, 3);
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
 		transaction.schema = 3;
+		for (const record of transaction.resources.filter((entry) => entry.kind !== "file")) delete record.displacedValues;
 		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`);
 		await assert.rejects(() => h.lifecycle.rollback(), /schema-3 transaction contains schema-4 snapshots/);
+		convertStateToLegacySchema(state, 4);
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
 		transaction.schema = 4;
 		const fileRecord = transaction.resources.find((entry) => entry.kind === "file");
 		delete fileRecord.beforeSnapshot;
@@ -824,19 +846,22 @@ test("schema-4 launcher metadata rejects drift and malformed combinations withou
 });
 
 test("schema-3 state and transactions remain readable and upgrade only after successful update", async (t) => {
-	await t.test("schema-3 previous state survives schema-4 update rollback", async (t) => {
+	await t.test("schema-3 previous state survives schema-5 update rollback", async (t) => {
 		const h = await harness("1.0.0");
 		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
 		await h.lifecycle.install();
 		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 		const legacyState = JSON.parse(await fs.readFile(statePath));
-		legacyState.schema = 3;
+		const predecessorPath = path.join(h.codexHome, ".codex-setup", "backups", legacyState.lastTransaction, "transaction.json");
+		const predecessor = convertTransactionToSchema3(JSON.parse(await fs.readFile(predecessorPath)));
+		await fs.writeFile(predecessorPath, `${JSON.stringify(predecessor)}\n`, { mode: 0o600 });
+		convertStateToLegacySchema(legacyState, 3);
 		await fs.writeFile(statePath, `${JSON.stringify(legacyState, null, 2)}\n`, { mode: 0o600 });
 		const next = await harness("1.1.0");
 		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
 		h.lifecycle.repoRoot = next.repo;
 		await h.lifecycle.update();
-		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 4);
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
 		await h.lifecycle.rollback();
 		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 3);
 	});
@@ -846,7 +871,7 @@ test("schema-3 state and transactions remain readable and upgrade only after suc
 		await h.lifecycle.install();
 		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 		const state = JSON.parse(await fs.readFile(statePath));
-		state.schema = 3;
+		convertStateToLegacySchema(state, 3);
 		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
 		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
 		const transaction = convertTransactionToSchema3(JSON.parse(await fs.readFile(transactionPath)));
@@ -856,12 +881,63 @@ test("schema-3 state and transactions remain readable and upgrade only after suc
 	});
 });
 
-test("CLI rejects --migrate-codex-launcher outside install", () => {
+test("schema-4 state and transactions remain readable across schema-5 writes", async (t) => {
+	await t.test("schema-4 launcher state survives schema-5 update rollback", async (t) => {
+		const h = await harness("1.0.0");
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addLauncher(h, "1.0.0", { first: true });
+		await writeLauncherSymlink(h, "../private/original-codex");
+		await h.lifecycle.install({ migrateCodexLauncher: true });
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const schema4State = JSON.parse(await fs.readFile(statePath));
+		const predecessorPath = path.join(h.codexHome, ".codex-setup", "backups", schema4State.lastTransaction, "transaction.json");
+		const predecessor = JSON.parse(await fs.readFile(predecessorPath));
+		predecessor.schema = 4;
+		for (const record of predecessor.resources.filter((entry) => entry.kind !== "file")) delete record.displacedValues;
+		await fs.writeFile(predecessorPath, `${JSON.stringify(predecessor)}\n`, { mode: 0o600 });
+		convertStateToLegacySchema(schema4State, 4);
+		await fs.writeFile(statePath, `${JSON.stringify(schema4State, null, 2)}\n`, { mode: 0o600 });
+
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await addLauncher(next, "1.1.0", { first: true });
+		h.lifecycle.repoRoot = next.repo;
+		await h.lifecycle.update();
+		let state = JSON.parse(await fs.readFile(statePath));
+		assert.equal(state.schema, 5);
+		assert.equal(snapshotLinkText(state.resources.find((entry) => entry.targetRoot === "local_bin").displacedSymlink), "../private/original-codex");
+		await h.lifecycle.rollback();
+		state = JSON.parse(await fs.readFile(statePath));
+		assert.equal(state.schema, 4);
+		assert.equal(snapshotLinkText(state.resources.find((entry) => entry.targetRoot === "local_bin").displacedSymlink), "../private/original-codex");
+	});
+
+	await t.test("schema-4 transaction rolls back successfully", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await h.lifecycle.install();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = JSON.parse(await fs.readFile(statePath));
+		convertStateToLegacySchema(state, 4);
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		transaction.schema = 4;
+		for (const record of transaction.resources.filter((entry) => entry.kind !== "file")) delete record.displacedValues;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await h.lifecycle.rollback();
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills", "managed", "SKILL.md")), { code: "ENOENT" });
+	});
+});
+
+test("CLI rejects migration flags outside install", () => {
 	const cli = path.join(import.meta.dirname, "../../scripts/codex-setup.mjs");
-	for (const command of ["adopt", "update", "doctor", "rollback", "uninstall", "install-toolchain"]) {
-		const result = spawnSync(process.execPath, [cli, command, "--migrate-codex-launcher"], { encoding: "utf8" });
-		assert.equal(result.status, 1, command);
-		assert.match(result.stderr, /valid only with install/);
+	for (const flag of ["--migrate-codex-launcher", "--migrate-managed-config"]) {
+		for (const command of ["adopt", "update", "doctor", "rollback", "uninstall", "install-toolchain"]) {
+			const result = spawnSync(process.execPath, [cli, command, flag], { encoding: "utf8" });
+			assert.equal(result.status, 1, `${flag} ${command}`);
+			assert.match(result.stderr, /valid only with install/);
+		}
 	}
 });
 
@@ -920,7 +996,7 @@ test("schema-3 state rejects schema-4 launcher fields", async (t) => {
 	await h.lifecycle.install({ migrateCodexLauncher: true });
 	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 	const state = JSON.parse(await fs.readFile(statePath));
-	state.schema = 3;
+	convertStateToLegacySchema(state, 3);
 	await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
 	await assert.rejects(() => h.lifecycle.uninstall(), /schema-3 managed state contains schema-4 launcher metadata/);
 });
@@ -949,7 +1025,10 @@ test("schema-3 uninstall transaction rolls back structurally and preserves unkno
 	await h.lifecycle.install();
 	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 	const legacyState = JSON.parse(await fs.readFile(statePath));
-	legacyState.schema = 3;
+	const predecessorPath = path.join(h.codexHome, ".codex-setup", "backups", legacyState.lastTransaction, "transaction.json");
+	const predecessor = convertTransactionToSchema3(JSON.parse(await fs.readFile(predecessorPath)));
+	await fs.writeFile(predecessorPath, `${JSON.stringify(predecessor)}\n`, { mode: 0o600 });
+	convertStateToLegacySchema(legacyState, 3);
 	await fs.writeFile(statePath, `${JSON.stringify(legacyState, null, 2)}\n`, { mode: 0o600 });
 	const configPath = path.join(h.codexHome, "config.json");
 	const beforeUninstall = JSON.parse(await fs.readFile(configPath));
@@ -1345,5 +1424,367 @@ test("uninstall lock prevents a failing concurrent update from stranding rollbac
 	assert.equal(await fs.readFile(path.join(h.codexHome, "skills", "managed", "SKILL.md"), "utf8"), "# managed 1.0.0\n");
 	assert.deepEqual(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))), {
 		features: { managed: "1.0.0" },
+
 	});
+});
+test("doctor explains that absent state means there is no completed installation", async (t) => {
+	const h = await harness();
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	assert.equal(await h.lifecycle.doctor(), 1);
+	assert.match(h.lines.join("\n"), /not installed: managed state is absent; no completed installation is available to verify/);
+	assert.doesNotMatch(h.lines.join("\n"), /private|config value/);
+});
+
+test("managed-config dry-run redacts malformed user config values", async (t) => {
+	const h = await harness();
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	await addTomlMerge(h, "1.0.0");
+	await fs.mkdir(h.codexHome, { recursive: true });
+	await fs.writeFile(path.join(h.codexHome, "config.toml"), "model = PRIVATE_MALFORMED_VALUE\n", { mode: 0o600 });
+	const dry = new Lifecycle({
+		repoRoot: h.repo,
+		codexHome: h.codexHome,
+		dataHome: h.dataHome,
+		userHome: h.home,
+		localBin: path.join(h.home, ".local", "bin"),
+		dryRun: true,
+		output: h.output,
+		toolchain: h.toolchain,
+	});
+	await assert.rejects(() => dry.install({ migrateManagedConfig: true }), (error) => {
+		assert.match(error.message, /existing config config.toml is not valid supported TOML/);
+		assert.doesNotMatch(error.message, /PRIVATE_MALFORMED_VALUE/);
+		return true;
+	});
+	assert.doesNotMatch(h.lines.join("\n"), /PRIVATE_MALFORMED_VALUE/);
+	await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+});
+
+test("combined launcher and managed-config migration is dry-run safe and initial rollback is exact", async (t) => {
+	const h = await harness();
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	await setJsonMerge(h, { model: "managed-model", features: { managed: true } });
+	await addLauncher(h, "1.0.0", { first: true });
+	const privateModel = "PRIVATE_MODEL_VALUE";
+	const launcher = path.join(h.home, ".local", "bin", "codex");
+	await fs.mkdir(h.codexHome, { recursive: true });
+	await fs.writeFile(path.join(h.codexHome, "config.json"), `${JSON.stringify({ model: privateModel, unknown: "keep-only-live" })}\n`, { mode: 0o600 });
+	await writeLauncherSymlink(h, "../private/original-codex");
+	const dry = new Lifecycle({
+		repoRoot: h.repo,
+		codexHome: h.codexHome,
+		dataHome: h.dataHome,
+		userHome: h.home,
+		localBin: path.join(h.home, ".local", "bin"),
+		dryRun: true,
+		output: h.output,
+		toolchain: h.toolchain,
+	});
+	await dry.install({ migrateCodexLauncher: true, migrateManagedConfig: true });
+	assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, privateModel);
+	const dryOutput = h.lines.join("\n");
+	assert.match(dryOutput, /migrate managed config path codex_home:config.json:model/);
+	assert.doesNotMatch(dryOutput, /PRIVATE_MODEL_VALUE|keep-only-live/);
+	await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+	await h.lifecycle.install({ migrateCodexLauncher: true, migrateManagedConfig: true });
+	const config = JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json")));
+	assert.deepEqual(config, { model: "managed-model", unknown: "keep-only-live", features: { managed: true } });
+	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+	const state = JSON.parse(await fs.readFile(statePath));
+	assert.equal(state.schema, 5);
+	const mergeResource = state.resources.find((entry) => entry.target === "config.json");
+	assert.equal(mergeResource.displacedValues[0].value, privateModel);
+	assert.equal((await fs.stat(statePath)).mode & 0o777, 0o600);
+	const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+	const transaction = JSON.parse(await fs.readFile(transactionPath));
+	assert.equal(transaction.schema, 5);
+	assert.equal((await fs.stat(transactionPath)).mode & 0o777, 0o600);
+	assert.equal(JSON.stringify(state).includes("keep-only-live"), false);
+	assert.equal(JSON.stringify(transaction).includes("keep-only-live"), false);
+	await h.lifecycle.rollback();
+	assert.deepEqual(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))), { model: privateModel, unknown: "keep-only-live" });
+	assert.equal(await fs.readlink(launcher), "../private/original-codex");
+});
+
+test("schema-5 displaced config metadata fails closed on tamper and misplacement", async (t) => {
+	async function migratedHarness() {
+		const h = await harness();
+		await setJsonMerge(h, { model: "managed-model" });
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(path.join(h.codexHome, "config.json"), '{"model":"PRIVATE_ORIGINAL_MODEL"}\n', { mode: 0o600 });
+		await h.lifecycle.install({ migrateManagedConfig: true });
+		return h;
+	}
+
+	await t.test("state rejects a displaced path paired with an invalid managed value", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = JSON.parse(await fs.readFile(statePath));
+		const resource = state.resources.find((entry) => entry.target === "config.json");
+		resource.managedPaths.find((entry) => entry.path.join(".") === "model").value = 42;
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.doctor(), (error) => {
+			assert.match(error.message, /non-migratable path or value type/);
+			assert.doesNotMatch(error.message, /PRIVATE_ORIGINAL_MODEL/);
+			return true;
+		});
+	});
+
+	await t.test("transaction rejects tampered displaced-value metadata", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		transaction.resources.find((entry) => entry.target === "config.json").displacedValues[0].byteLength += 1;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /does not match its action state/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
+	});
+
+	await t.test("transaction rejects displaced config metadata on a file resource", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		const displacedValues = transaction.resources.find((entry) => entry.target === "config.json").displacedValues;
+		transaction.resources.find((entry) => entry.kind === "file").displacedValues = structuredClone(displacedValues);
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /displaced config values for a non-merge resource/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
+	});
+
+	await t.test("uninstall rollback binds the managed delta side to the previous state", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await h.lifecycle.uninstall();
+		const stateDir = path.join(h.codexHome, ".codex-setup");
+		const uninstalled = (await fs.readdir(stateDir)).find((name) => name.startsWith("state.uninstalled-"));
+		const id = uninstalled.slice("state.uninstalled-".length, -".json".length);
+		const transactionPath = path.join(stateDir, "backups", id, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		const delta = transaction.resources.find((entry) => entry.target === "config.json").managedDelta
+			.find((entry) => entry.path.join(".") === "model");
+		delta.before.value = 42;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback({ transaction: id }), /inconsistent with its action states/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "PRIVATE_ORIGINAL_MODEL");
+		await assert.rejects(() => fs.stat(path.join(stateDir, "state.json")), { code: "ENOENT" });
+	});
+
+	await t.test("transaction cannot omit required displaced metadata", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await h.lifecycle.uninstall();
+		const stateDir = path.join(h.codexHome, ".codex-setup");
+		const uninstalled = (await fs.readdir(stateDir)).find((name) => name.startsWith("state.uninstalled-"));
+		const id = uninstalled.slice("state.uninstalled-".length, -".json".length);
+		const transactionPath = path.join(stateDir, "backups", id, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		const record = transaction.resources.find((entry) => entry.target === "config.json");
+		delete record.displacedValues;
+		delete transaction.previousState.resources.find((entry) => entry.target === "config.json").displacedValues;
+		record.managedDelta.find((entry) => entry.path.join(".") === "model").before.value = 42;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback({ transaction: id }), /missing displaced config metadata/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "PRIVATE_ORIGINAL_MODEL");
+		await assert.rejects(() => fs.stat(path.join(stateDir, "state.json")), { code: "ENOENT" });
+	});
+
+	await t.test("legacy schema label cannot hide a displaced uninstall transition", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await h.lifecycle.uninstall();
+		const stateDir = path.join(h.codexHome, ".codex-setup");
+		const uninstalled = (await fs.readdir(stateDir)).find((name) => name.startsWith("state.uninstalled-"));
+		const id = uninstalled.slice("state.uninstalled-".length, -".json".length);
+		const transactionPath = path.join(stateDir, "backups", id, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		convertStateToLegacySchema(transaction.previousState, 4);
+		const record = transaction.resources.find((entry) => entry.target === "config.json");
+		record.displacedValues = [];
+		record.managedDelta.find((entry) => entry.path.join(".") === "model").before.value = 42;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback({ transaction: id }), /omits required displaced config metadata/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "PRIVATE_ORIGINAL_MODEL");
+		await assert.rejects(() => fs.stat(path.join(stateDir, "state.json")), { code: "ENOENT" });
+	});
+
+	await t.test("update cannot omit displacement carried by the active state", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await setJsonMerge(next, { model: "managed-model-2" });
+		h.lifecycle.repoRoot = next.repo;
+		await h.lifecycle.update();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = JSON.parse(await fs.readFile(statePath));
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		convertStateToLegacySchema(transaction.previousState, 4);
+		const record = transaction.resources.find((entry) => entry.target === "config.json");
+		record.displacedValues = [];
+		record.managedDelta.find((entry) => entry.path.join(".") === "model").before.value = 42;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /omits carried displaced config metadata/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model-2");
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+	});
+
+	await t.test("intact predecessor rejects omission across active and current update metadata", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await setJsonMerge(next, { model: "managed-model-2" });
+		h.lifecycle.repoRoot = next.repo;
+		await h.lifecycle.update();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = JSON.parse(await fs.readFile(statePath));
+		state.resources.find((entry) => entry.target === "config.json").displacedValues = [];
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		transaction.previousState.resources.find((entry) => entry.target === "config.json").displacedValues = [];
+		transaction.resources.find((entry) => entry.target === "config.json").displacedValues = [];
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /displaced managed config metadata does not match its action state/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model-2");
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+	});
+
+	await t.test("intact predecessor rejects legacy relabel across active and current update metadata", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await setJsonMerge(next, { model: "managed-model-2" });
+		h.lifecycle.repoRoot = next.repo;
+		await h.lifecycle.update();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = convertStateToLegacySchema(JSON.parse(await fs.readFile(statePath)), 4);
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		transaction.schema = 4;
+		convertStateToLegacySchema(transaction.previousState, 4);
+		delete transaction.resources.find((entry) => entry.target === "config.json").displacedValues;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /predecessor|schema does not match its active state/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model-2");
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 4);
+	});
+
+	await t.test("coordinated legacy relabel cannot hide an initial displaced transition", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = convertStateToLegacySchema(JSON.parse(await fs.readFile(statePath)), 4);
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		transaction.schema = 4;
+		const record = transaction.resources.find((entry) => entry.target === "config.json");
+		delete record.displacedValues;
+		record.managedDelta.find((entry) => entry.path.join(".") === "model").before.value = 42;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /legacy rollback transaction contains displacement-shaped config delta/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 4);
+	});
+
+	await t.test("transaction cannot inject extra displaced metadata", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		const record = transaction.resources.find((entry) => entry.target === "config.json");
+		record.displacedValues.push(structuredClone(record.displacedValues[0]));
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /does not match its action state/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
+	});
+
+	await t.test("malformed state JSON does not disclose nearby displaced values", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		await fs.writeFile(statePath, '{"schema":5,"value":PRIVATE_STATE_SENTINEL}\n', { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.doctor(), (error) => {
+			assert.equal(error.message, "managed state is invalid JSON");
+			assert.doesNotMatch(error.message, /PRIVATE_STATE_SENTINEL/);
+			return true;
+		});
+	});
+
+	await t.test("malformed transaction JSON does not disclose nearby displaced values", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		await fs.writeFile(transactionPath, '{"schema":5,"value":PRIVATE_TRANSACTION_SENTINEL}\n', { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), (error) => {
+			assert.equal(error.message, "rollback transaction is invalid JSON");
+			assert.doesNotMatch(error.message, /PRIVATE_TRANSACTION_SENTINEL/);
+			return true;
+		});
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
+	});
+
+	await t.test("schema downgrade cannot strip displaced-value transaction metadata", async (t) => {
+		const h = await migratedHarness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const state = JSON.parse(await fs.readFile(statePath));
+		const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const transaction = JSON.parse(await fs.readFile(transactionPath));
+		transaction.schema = 4;
+		for (const resource of transaction.resources) delete resource.displacedValues;
+		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /schema does not match its active state/);
+		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+	});
+});
+
+test("displaced config survives update and is restored by removal and repeated uninstall", async (t) => {
+	const h = await harness("1.0.0");
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	await setJsonMerge(h, { model: "managed-1" });
+	await fs.mkdir(h.codexHome, { recursive: true });
+	await fs.writeFile(path.join(h.codexHome, "config.json"), '{"model":"original","unknown":true}\n', { mode: 0o600 });
+	await h.lifecycle.install({ migrateManagedConfig: true });
+	const next = await harness("1.1.0");
+	t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+	await setJsonMerge(next, { model: "managed-2" });
+	h.lifecycle.repoRoot = next.repo;
+	await h.lifecycle.update();
+	let state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
+	assert.equal(state.resources.find((entry) => entry.target === "config.json").displacedValues[0].value, "original");
+	const removed = await harness("1.2.0");
+	t.after(() => fs.rm(removed.root, { recursive: true, force: true }));
+	const releasePath = path.join(removed.repo, "release.json");
+	const release = JSON.parse(await fs.readFile(releasePath));
+	release.artifacts = release.artifacts.filter((entry) => entry.target !== "config.json");
+	await fs.writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`);
+	h.lifecycle.repoRoot = removed.repo;
+	await h.lifecycle.update();
+	let config = JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json")));
+	assert.deepEqual(config, { model: "original", unknown: true });
+	await h.lifecycle.rollback();
+	config = JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json")));
+	assert.deepEqual(config, { model: "managed-2", unknown: true });
+	await h.lifecycle.uninstall();
+	assert.deepEqual(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))), { model: "original", unknown: true });
+	const stateDir = path.join(h.codexHome, ".codex-setup");
+	const uninstalled = (await fs.readdir(stateDir)).find((name) => name.startsWith("state.uninstalled-"));
+	const id = uninstalled.slice("state.uninstalled-".length, -".json".length);
+	await h.lifecycle.rollback({ transaction: id });
+	assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-2");
+	await h.lifecycle.uninstall();
+	assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "original");
 });

@@ -15,12 +15,18 @@ digest. Installed state records the release, ordinary-file installed digests,
 managed configuration paths and values, modes, and the exact validated
 toolchain identity.
 It deliberately records no whole-document digest for JSON/TOML merge targets,
-so unknown values cannot influence retained managed metadata. Schema 4 adds a
+so unknown values cannot influence retained managed metadata. Schema 4 added a
 single typed displaced-symlink snapshot for an explicitly migrated
 `local_bin:codex` launcher. That private snapshot contains bounded base64 of
 exact raw target bytes, byte length, and digest; it is carried through updates
-until restored by manifest removal or uninstall. Schema-3 state and transactions remain
+until restored by manifest removal or uninstall. Schema 5 adds typed, bounded,
+per-value length/SHA-256 metadata only for explicitly displaced allowlisted
+scalar config paths. It never retains a whole config document, its digest, or
+unknown keys. Schema-3 and schema-4 state and transactions remain
 readable and upgrade only when a later update commits successfully.
+Rollback also cross-checks an embedded previous state against its retained
+predecessor transaction. This detects omission or legacy relabeling when the
+predecessor remains intact; it is a consistency check, not authentication.
 
 Toolchain release directory identities include both the component-lock and npm package-lock digests, so either exact lock changing selects a distinct immutable path. Bootstrap delegates this identity entirely to the JavaScript installer.
 
@@ -38,6 +44,15 @@ is inspected with `lstat` and `readlink`, without dereferencing its target, then
 its exact type, raw target bytes, device, and inode are revalidated immediately
 before same-directory atomic replacement. All other leaf symlinks remain rejected.
 
+
+A second fresh-install exception, `--migrate-managed-config`, can replace a
+conflicting declared leaf only when both old and new values are safe scalars on
+the strict model/reasoning/approval string, non-executable boolean
+feature/memory, and typed agent-policy allowlist. Structural ancestor conflicts
+and MCP command/argument fields remain closed; `features.hooks` is also excluded
+because enabling it activates installed commands. Updates carry an existing
+displacement while the path remains managed and restore it when the manifest
+drops the path; they cannot create a new displacement.
 If any check fails, the command stops without overwriting the path. Install and
 update also require the current toolchain receipt to match the checkout locks.
 If bootstrap selected a new toolchain but release loading or payload preparation

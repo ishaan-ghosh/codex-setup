@@ -26,14 +26,23 @@ immediately before each mutation. Lifecycle writes use transaction backups and
 per-file atomic replacement; launcher restoration uses a temporary symlink and
 same-directory rename and never chmods a symlink. Toolchain releases are staged
 and atomically selected. Mode `0700` transaction directories may retain
-mode-`0600` full-byte backups for ordinary managed files. Schema-4 state and
+mode-`0600` full-byte backups for ordinary managed files. Schema-4 and later state and
 transactions may also retain bounded base64 of the migrated launcher's exact
 raw target bytes plus their length and SHA-256, always in local mode-`0600`
 files. Diagnostics and dry-runs never print or decode those bytes. JSON/TOML
 merge targets instead retain only
 managed-path presence, value, mode, and creation deltas; rollback reconstructs
 those paths structurally while preserving unknown current keys. Unknown user
-configuration values are never copied into lifecycle state or backups, and
+configuration values are never copied into lifecycle state or backups except
+with explicit fresh-install `--migrate-managed-config` consent for a declared,
+low-risk scalar path. The strict allowlist is limited to model, reasoning, and
+approval policy strings; selected booleans under `features` and `memories`; and
+declared, typed scalar agent policy settings. Each displaced value has tight
+count/size bounds and canonical byte-length/SHA-256 validation. MCP command,
+argument, executable, and credential-capable fields remain closed conflicts;
+this explicitly includes `features.hooks`, because enabling it activates installed
+hook commands.
+Diagnostics disclose path names only, and
 merge resources never retain a digest of the whole user document.
 
 The transaction record is durably written before payload mutation and caught
@@ -53,6 +62,16 @@ Rollback rejects a transaction whose resource keys omit or add anything
 relative to the action-specific current/previous state set before mutation.
 As with ordinary managed files, this is not a claim of automatic recovery from
 `SIGKILL`, kernel failure, or power loss: there is no startup journal replay.
+Managed-config migration is separate explicit consent, is not supported by
+`adopt`, and cannot be initiated by update. Structural ancestor conflicts stay
+closed. Removal and uninstall restore only the validated displaced declared
+paths while preserving unrelated live edits.
+Rollback binds carried displacement in both directions and validates the
+embedded previous state against its retained predecessor transaction before
+mutation. A missing or inconsistent retained predecessor therefore fails
+closed. State and transaction metadata are not cryptographically authenticated:
+an actor able to rewrite the live config and every retained lineage record is
+inside the local trust boundary and can forge a self-consistent history.
 After such an interruption, preserve `$CODEX_HOME/.codex-setup`, inspect state
 and transaction metadata, and reconcile before rerunning a lifecycle command.
 

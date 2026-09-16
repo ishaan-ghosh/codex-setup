@@ -45,8 +45,11 @@ State and transaction backups live under `$CODEX_HOME/.codex-setup`.
 Byte-owned file resources store their installed SHA-256 and mode; merge
 resources store their managed paths and mode. State and transactions also bind
 the release to a validated toolchain receipt and executable checksum inventory.
-Schema 4 uses typed missing/file/symlink transaction snapshots and retains
-schema-3 read compatibility.
+Schema 4 introduced typed missing/file/symlink transaction snapshots. Schema 5
+adds bounded typed displaced-value metadata for explicitly migrated config
+leaves. Each entry carries canonical byte length and SHA-256 integrity data;
+whole config bytes/digests and unknown keys are never retained. Schema-3 and
+schema-4 read/rollback/update compatibility remains strict.
 
 A fresh `install --migrate-codex-launcher` may replace only an existing
 `local_bin:codex` leaf symlink. It records bounded base64 of the exact raw
@@ -54,6 +57,15 @@ target bytes privately for rollback, update carry-forward, manifest removal, and
 invalid with every other command, including `adopt`; without it the symlink is
 an actionable closed conflict. No link target is dereferenced, executed,
 allowlisted by shape, decoded for diagnostics, or printed.
+
+A fresh `install --migrate-managed-config` may replace conflicting declared
+leaves only on the low-risk scalar allowlist: model/reasoning/approval strings,
+non-executable boolean feature/memory settings, and typed scalar agent settings.
+Structural ancestors, `features.hooks`, MCP commands/arguments, and executable- or
+credential-capable fields remain closed conflicts. Dry-run and diagnostics list
+paths only. Existing displacement is carried through updates, restored on
+manifest removal/uninstall, and reapplied correctly by rollback. The flag is
+invalid for adopt, update, doctor, rollback, uninstall, and install-toolchain.
 
 Update, rollback, doctor, and uninstall refuse payload, mode, pointer, link, or
 toolchain drift. The lifecycle never targets authentication, sessions, memories,

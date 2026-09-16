@@ -16,7 +16,14 @@
    rollback/update and uninstall/update toolchain-pointer serialization,
    pre-mutation pointer authentication, state and payload recovery drift
    refusal, dry-run uninstall nonmutation, non-UTF-8 target bytes, and schema-3
-   install/update/uninstall rollback compatibility.
+   and schema-4 install/update/uninstall rollback compatibility. Managed-config
+   migration contracts cover JSON and TOML structural replacement, ordinary
+   fail-closed conflicts, path-only dry-run output, schema-5 private metadata,
+   combined launcher/config restoration, update carry-forward, manifest
+   removal, uninstall/rollback repetition, tamper and misplaced-metadata
+   rejection, predecessor-lineage consistency, active/current-record omission
+   and schema-relabel rejection, CLI scope, and non-migratable MCP
+   command/argument and hook-enablement conflicts.
 3. Toolchain tests verify exact Node, Codex, Playwright MCP, and Chromium
    identities without changing the host toolchain. Executed regressions tamper
    with runtime, package, and platform-native Codex executables and prove
@@ -71,6 +78,14 @@ then exercise uninstall or initial rollback and confirm `readlink` returns the e
 isolated cross-platform regression suite is green.
 
 ## CachyOS first-use canary
+
+For a pre-existing low-risk managed config conflict, first run the path-only
+`install --dry-run --migrate-managed-config`. Review every reported path, then
+run `install --migrate-managed-config` (optionally combined with launcher
+migration), doctor, rollback/uninstall, and confirm only the displaced declared
+paths return to their original typed values. Never put config values in the
+report. The real macOS canary remains pending until this sequence completes on
+Apple Silicon.
 
 1. Record OS, architecture, shell, existing Codex path, and `CODEX_HOME`
    without printing secrets.

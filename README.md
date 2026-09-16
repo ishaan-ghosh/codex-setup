@@ -69,6 +69,22 @@ initial rollback, manifest removal, or uninstall. Symlinked ancestors and every
 other managed symlink remain closed conflicts. Dry-run reports the migration
 without printing or decoding the link target bytes.
 
+An existing scalar value at a repository-declared config path remains a closed
+conflict by default. After reviewing the path-only dry-run, a fresh install may
+explicitly preserve and replace low-risk policy settings with:
+
+```sh
+./bin/codex-setup install --dry-run --migrate-managed-config
+./bin/codex-setup install --migrate-managed-config
+```
+
+This install-only flag covers allowlisted model/reasoning/approval strings,
+non-executable boolean feature and memory settings, and typed agent policy
+settings, consistent with the top-level policy concepts in the official Codex
+configuration reference. MCP commands/arguments, `features.hooks`, and other
+executable- or credential-capable fields are never auto-migrated. Diagnostics
+print paths, not values; rollback and uninstall restore displaced values.
+
 ## Daily profiles
 
 ```sh
