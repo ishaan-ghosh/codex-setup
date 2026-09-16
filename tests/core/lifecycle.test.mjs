@@ -48,7 +48,8 @@ function fakeToolchain(initial = toolchainIdentity()) {
 }
 
 async function harness(version = "1.0.0", extraArtifacts = []) {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-setup-core-"));
+	const tempRoot = await fs.realpath(os.tmpdir());
+	const root = await fs.mkdtemp(path.join(tempRoot, "codex-setup-core-"));
 	const repo = path.join(root, "repo");
 	const home = path.join(root, "home");
 	const codexHome = path.join(home, ".codex");
@@ -136,9 +137,14 @@ test("install conflict and symlink path fail before managed writes", async (t) =
 	await t.test("symlink parent", async (t) => {
 		const h = await harness(); t.after(() => fs.rm(h.root, { recursive: true, force: true }));
 		const outside = path.join(h.root, "outside");
+		const symlinkParent = path.join(h.codexHome, "skills");
 		await fs.mkdir(h.codexHome, { recursive: true }); await fs.mkdir(outside);
-		await fs.symlink(outside, path.join(h.codexHome, "skills"), "dir");
-		await assert.rejects(() => h.lifecycle.install(), /symbolic-link component/);
+		await fs.symlink(outside, symlinkParent, "dir");
+		await assert.rejects(() => h.lifecycle.install(), (error) => {
+			assert.match(error.message, /symbolic-link component/);
+			assert.ok(error.message.endsWith(symlinkParent));
+			return true;
+		});
 		assert.deepEqual(await fs.readdir(outside), []);
 	});
 });
@@ -297,9 +303,14 @@ test("rollback rejects a managed ancestor replaced by a symlink without touching
 	await fs.writeFile(sentinel, "outside-sentinel\n");
 	const outsideManaged = path.join(outside, "managed/SKILL.md");
 	const outsideBefore = await fs.readFile(outsideManaged);
-	await fs.symlink(outside, path.join(h.codexHome, "skills"), "dir");
+	const symlinkParent = path.join(h.codexHome, "skills");
+	await fs.symlink(outside, symlinkParent, "dir");
 
-	await assert.rejects(() => h.lifecycle.rollback({ transaction: state.lastTransaction }), /symbolic-link component/);
+	await assert.rejects(() => h.lifecycle.rollback({ transaction: state.lastTransaction }), (error) => {
+		assert.match(error.message, /symbolic-link component/);
+		assert.ok(error.message.endsWith(symlinkParent));
+		return true;
+	});
 	assert.equal(await fs.readFile(sentinel, "utf8"), "outside-sentinel\n");
 	assert.deepEqual(await fs.readFile(outsideManaged), outsideBefore);
 	assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup/state.json"))).lastTransaction, state.lastTransaction);

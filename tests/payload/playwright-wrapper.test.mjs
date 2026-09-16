@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -8,7 +8,7 @@ import test from "node:test";
 const wrapper = join(import.meta.dirname, "../../payload/bin/codex-playwright-mcp");
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "codex-playwright-wrapper-test-"));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), "codex-playwright-wrapper-test-"));
   const node = join(root, "data/toolchains/release/node/bin/node");
   const cli = join(root, "data/toolchains/release/app/node_modules/@playwright/mcp/cli.js");
   mkdirSync(join(root, "data/toolchains/release/node/bin"), { recursive: true });
@@ -59,6 +59,7 @@ test("wrapper rejects symlinked writable output and profile components", () => {
   symlinkSync(join(output.root, "outside"), join(output.data, "browser-output"));
   const blockedOutput = run(output, ["local-test"]);
   assert.equal(blockedOutput.status, 70);
+  assert.equal(blockedOutput.stderr.trim(), `codex-playwright-mcp: unsafe path: ${join(output.data, "browser-output")}`);
 
   const profile = fixture();
   mkdirSync(join(profile.data, "browser-output"), { recursive: true });
@@ -67,4 +68,5 @@ test("wrapper rejects symlinked writable output and profile components", () => {
   symlinkSync(join(profile.root, "outside-profile"), join(profile.data, "browser-profiles/authenticated"));
   const blockedProfile = run(profile, ["authenticated-browser"]);
   assert.equal(blockedProfile.status, 70);
+  assert.equal(blockedProfile.stderr.trim(), `codex-playwright-mcp: unsafe path: ${join(profile.data, "browser-profiles/authenticated")}`);
 });

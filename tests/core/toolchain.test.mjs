@@ -8,6 +8,17 @@ import { fileURLToPath } from "node:url";
 import { codexNativeSpec, ToolchainInstaller, toolchainReleaseId } from "../../lib/toolchain-installer.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+const nativePlatform = {
+	"darwin-arm64": "darwin-arm64",
+	"linux-x64": "linux-x64",
+}[`${process.platform}-${process.arch}`];
+
+if (!nativePlatform) throw new Error(`unsupported test platform: ${process.platform}-${process.arch}`);
+
+async function testTempDirectory(prefix) {
+	const tempRoot = await fs.realpath(os.tmpdir());
+	return fs.mkdtemp(path.join(tempRoot, prefix));
+}
 
 test("Codex native package mapping is exact for supported platforms", () => {
 	assert.deepEqual(codexNativeSpec("darwin-arm64"), {
@@ -40,7 +51,7 @@ test("POSIX bootstrap pins the exact Node artifacts from component-lock", async 
 });
 
 test("toolchain dry-run validates locks without network or filesystem writes", async (t) => {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-toolchain-dry-"));
+	const root = await testTempDirectory("codex-toolchain-dry-");
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
 	const dataHome = path.join(root, "data");
 	const lines = [];
@@ -60,7 +71,7 @@ test("toolchain dry-run validates locks without network or filesystem writes", a
 
 
 test("a package-lock-only change selects a distinct toolchain release path", async (t) => {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-toolchain-id-"));
+	const root = await testTempDirectory("codex-toolchain-id-");
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
 	const repo = path.join(root, "repo");
 	await fs.mkdir(path.join(repo, "toolchain"), { recursive: true });
@@ -120,7 +131,7 @@ test("toolchain implementation uses the unified release-local layout", async () 
 
 
 test("bootstrap ignores existing stubs and executes only the freshly archive-verified runtime", async (t) => {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-bootstrap-transient-"));
+	const root = await testTempDirectory("codex-bootstrap-transient-");
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
 	const home = path.join(root, "home");
 	const dataHome = path.join(root, "data");
@@ -149,13 +160,15 @@ done
 : > "$out"
 `, { mode: 0o755 });
 	const lock = JSON.parse(await fs.readFile(path.join(repoRoot, "component-lock.json")));
-	const expected = lock.components.node.artifacts["linux-x64"].sha256;
+	const artifact = lock.components.node.artifacts[nativePlatform];
+	const expected = artifact.sha256;
+	const archiveRoot = artifact.file.replace(/\.tar\.gz$/, "");
 	await fs.writeFile(path.join(fakeBin, "sha256sum"), `#!/bin/sh
 printf '%s  %s\\n' "${expected}" "$1"
 `, { mode: 0o755 });
 	await fs.writeFile(path.join(fakeBin, "tar"), `#!/bin/sh
 if [ "$1" = "-tzf" ]; then
-  printf '%s\\n' 'node-v22.22.0-linux-x64/bin/node'
+  printf '%s\\n' '${archiveRoot}/bin/node'
   exit 0
 fi
 destination=
@@ -174,12 +187,12 @@ chmod 755 "$destination/bin/node"
 		env: { ...process.env, HOME: home, CODEX_SETUP_DATA_HOME: dataHome, PATH: `${fakeBin}:${process.env.PATH}` },
 	});
 	assert.equal(result.status, 0, result.stderr);
-	assert.match(result.stdout, /Downloading pinned bootstrap Node.js/);
+	assert.match(result.stdout, new RegExp(`Downloading pinned bootstrap Node\\.js .* for ${nativePlatform}`));
 	assert.match(await fs.readFile(transientMarker, "utf8"), /scripts\/codex-setup\.mjs/);
 	await assert.rejects(() => fs.stat(existingMarker), { code: "ENOENT" });
 });
 
-const nativeCodexFixture = process.platform === "darwin"
+const nativeCodexFixture = nativePlatform === "darwin-arm64"
 	? {
 		platform: "darwin-arm64",
 		package: "@openai/codex-darwin-arm64",
@@ -196,7 +209,7 @@ function nativeExecutable(fixture = nativeCodexFixture) {
 }
 
 async function fakeInstallHarness(t, { installNative = true, versionOutput = "codex-cli 0.154.0\n" } = {}) {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-toolchain-optional-"));
+	const root = await testTempDirectory("codex-toolchain-optional-");
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
 	const repo = path.join(root, "repo");
 	const dataHome = path.join(root, "data");
@@ -294,7 +307,7 @@ test("toolchain install cannot certify an npm result missing the native Codex de
 });
 
 test("receipt validation rejects missing and tampered native Codex executables", async (t) => {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-toolchain-integrity-"));
+	const root = await testTempDirectory("codex-toolchain-integrity-");
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
 	const dataHome = path.join(root, "data");
 	const releaseId = `synthetic-${nativeCodexFixture.platform}`;

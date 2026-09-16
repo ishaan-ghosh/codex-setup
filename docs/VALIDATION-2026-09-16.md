@@ -15,7 +15,7 @@ The integrated local suite was run with:
 
     npm run check
 
-Result: 56 tests passed, zero failed, and the release manifest verified all 47
+Result: 57 tests passed, zero failed, and the release manifest verified all 47
 managed artifacts plus all 11 skill directories.
 
 Every bundled skill was also validated with the installed skill-creator
@@ -75,8 +75,10 @@ Those findings were fixed with retained regressions before publication.
 
 - A real CachyOS AMD64 canary is required before using this setup as the primary
   local installation.
-- macOS Apple Silicon and Arch adapter paths were not run on this Ubuntu host;
-  their CI jobs have not run because the candidate has not been pushed.
+- macOS Apple Silicon and Arch adapter paths were not run on this Ubuntu host.
+  Their first CI jobs exposed test-fixture temporary-path portability and Arch
+  checkout-ownership issues. Bounded fixes pass locally but require a follow-up
+  push and CI rerun before those platform jobs are validated.
 - Hook trust through the interactive /hooks screen must be reviewed on each
   machine after first install or a hook change.
 - The authenticated-browser profile was not exercised and no login state was

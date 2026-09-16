@@ -253,7 +253,8 @@ export async function downloadArchive({ fetchImpl = fetch, url = SUPERPOWERS.arc
 	if (declared > MAX_ARCHIVE_BYTES) throw new Error("Superpowers archive exceeds size limit");
 	const bytes = Buffer.from(await response.arrayBuffer());
 	if (bytes.length > MAX_ARCHIVE_BYTES) throw new Error("Superpowers archive exceeds size limit");
-	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "codex-superpowers-"));
+	const tempRoot = await fs.realpath(os.tmpdir());
+	const directory = await fs.mkdtemp(path.join(tempRoot, "codex-superpowers-"));
 	const archivePath = path.join(directory, "superpowers.tar.gz");
 	await fs.writeFile(archivePath, bytes, { mode: 0o600 });
 	return { archivePath, cleanup: () => fs.rm(directory, { recursive: true, force: true }) };

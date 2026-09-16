@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
-import { SUPERPOWERS, doctor, extractSelectedSkills, installFromArchive, uninstall } from "../../components/superpowers/index.mjs";
+import { SUPERPOWERS, doctor, downloadArchive, extractSelectedSkills, installFromArchive, uninstall } from "../../components/superpowers/index.mjs";
 
 const root = `superpowers-${SUPERPOWERS.commit}`;
 const enabled = [...SUPERPOWERS.enabled];
@@ -47,7 +47,8 @@ function archive(extra = []) {
 }
 
 async function fixture(bytes = archive()) {
-	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-superpowers-test-"));
+	const tempRoot = await fs.realpath(os.tmpdir());
+	const dir = await fs.mkdtemp(path.join(tempRoot, "codex-superpowers-test-"));
 	const archivePath = path.join(dir, "fixture.tar.gz");
 	await fs.writeFile(archivePath, bytes, { mode: 0o600 });
 	return { dir, archivePath, codexHome: path.join(dir, "codex"), skillsRoot: path.join(dir, "home", ".agents", "skills") };
@@ -89,6 +90,55 @@ test("rejects traversal and selected symlink entries", async () => {
 	assert.throws(() => extractSelectedSkills(traversal), /unsafe path/);
 	const symlink = archive([entry(`${root}/skills/brainstorming/evil`, Buffer.alloc(0), "2", "../../escape")]);
 	assert.throws(() => extractSelectedSkills(symlink), /contains a link/);
+});
+
+test("download uses a canonical internal temp root while caller archive symlinks remain blocked", async () => {
+	const bytes = archive();
+	const originalTmpdir = process.env.TMPDIR;
+	const tempRoot = await fs.realpath(os.tmpdir());
+	const base = await fs.mkdtemp(path.join(tempRoot, "codex-superpowers-linked-tmp-"));
+	const realTmp = path.join(base, "real-tmp");
+	const linkedTmp = path.join(base, "linked-tmp");
+	let downloaded;
+	try {
+		await fs.mkdir(realTmp);
+		await fs.symlink(realTmp, linkedTmp, "dir");
+		process.env.TMPDIR = linkedTmp;
+		downloaded = await downloadArchive({
+			fetchImpl: async () => ({
+				ok: true,
+				status: 200,
+				url: SUPERPOWERS.archiveUrl,
+				headers: { get: (name) => name.toLowerCase() === "content-length" ? String(bytes.length) : null },
+				arrayBuffer: async () => bytes,
+			}),
+		});
+		assert.equal(downloaded.archivePath.startsWith(`${realTmp}${path.sep}`), true);
+		assert.equal(downloaded.archivePath.startsWith(`${linkedTmp}${path.sep}`), false);
+
+		const codexHome = path.join(base, "codex");
+		const skillsRoot = path.join(base, "home", ".agents", "skills");
+		const installed = await installFromArchive({
+			codexHome,
+			skillsRoot,
+			archivePath: downloaded.archivePath,
+			expectedArchiveSha256: sha(bytes),
+		});
+		assert.equal(installed.changed, true);
+
+		const callerArchive = path.join(base, "caller-archive.tar.gz");
+		await fs.symlink(downloaded.archivePath, callerArchive);
+		await assert.rejects(() => installFromArchive({ codexHome, skillsRoot, archivePath: callerArchive, expectedArchiveSha256: sha(bytes) }), (error) => {
+			assert.match(error.message, /archive path contains a symbolic-link component/);
+			assert.ok(error.message.endsWith(callerArchive));
+			return true;
+		});
+	} finally {
+		if (originalTmpdir === undefined) delete process.env.TMPDIR;
+		else process.env.TMPDIR = originalTmpdir;
+		await downloaded?.cleanup?.();
+		await cleanup(base);
+	}
 });
 
 test("is idempotent, reports deferred workflows, and uninstalls only owned files", async () => {
