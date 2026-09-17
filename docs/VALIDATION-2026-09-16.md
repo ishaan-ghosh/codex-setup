@@ -6,7 +6,8 @@
 - Host: Ubuntu 24.04.4 LTS, Linux 6.8.0-137-generic, x86_64
 - Isolated root: /tmp/codex-setup-v1-final.7TV1JE
 - Retained schema-3 compatibility HOME: /tmp/codex-setup-v1-final.7TV1JE/home-schema3
-- Current local profile-merge compatibility writer under validation: schema 6 (uncommitted)
+- Published base revision: `ebc38802a6bf92a0e143ee841ca5f471d21b9a92`
+- Current profile-transport compatibility hotfix: uncommitted
 - Managed release: 47 artifacts and 11 skills
 - Toolchain: Node.js 22.22.0, Codex CLI 0.154.0, Playwright MCP 0.0.81, pinned Chromium
 
@@ -16,8 +17,8 @@ The integrated local suite was run with:
 
     npm run check
 
-The current schema-6 writer pass was run locally with the same command.
-Result: 149 tests passed, zero failed; tracked secret hygiene was clean; and the
+The current profile-transport hotfix was run locally with the same command.
+Result: 155 tests passed, zero failed; tracked secret hygiene was clean; and the
 release manifest verified all 47 managed artifacts plus all 11 skill
 directories. The added isolated coverage exercises explicit launcher migration,
 dry-run privacy, arbitrary live/broken absolute/relative targets including
@@ -44,7 +45,12 @@ and legacy-transition refusal, preservation of pre-existing empty ancestor
 tables, setup-created-container pruning and state-metadata tamper rejection,
 conservative legacy handling when container ownership metadata is absent,
 post-transition unknown-key refusal, and rejection of every unrelated resource
-kind change. Adversarial regressions also cover bidirectional carried-displacement
+kind change. Profile-local MCP tables are additionally required to declare one
+complete standalone transport so Codex can validate configuration writes while
+any profile is active. Existing incompatible stdio/HTTP transport and unsupported
+runtime fields are rejected before install or update mutation, including when
+managed-config migration is requested, while fields accepted by both transports
+remain user-owned. Adversarial regressions also cover bidirectional carried-displacement
 binding and retained predecessor-lineage checks against active/current-record
 omission or schema relabeling. These are local consistency checks, not
 cryptographic authentication against wholesale lineage rewriting.
@@ -53,11 +59,11 @@ Every bundled skill was also validated with the installed skill-creator
 quick_validate.py. Shell syntax checks and git diff --check passed.
 
 CI run
-[35141985035](https://github.com/ishaan-ghosh/codex-setup/actions/runs/35141985035)
-completed successfully on 2026-09-16. Its Ubuntu 24.04 Node tests, macOS 14 Node
+[35244737726](https://github.com/ishaan-ghosh/codex-setup/actions/runs/35244737726)
+completed successfully on 2026-09-17. Its Ubuntu 24.04 Node tests, macOS 14 Node
 tests, Arch AMD64 adapter, and tracked-secret-hygiene jobs were all green. That
-run validates the pre-migration baseline commit; it does not validate this
-uncommitted schema-6 writer pass.
+run validates published base revision `ebc3880`; it does not validate this
+uncommitted profile-transport hotfix.
 
 ## Real Ubuntu lifecycle evidence
 
@@ -99,14 +105,20 @@ The following paths were exercised:
 
 On Apple Silicon macOS, bootstrap reused the verified pinned
 `22.22.0-darwin-arm64` toolchain. The combined launcher/config migration dry-run
-then stopped before mutation at the pre-existing `dev.config.toml`, because the
-pushed manifest still represented profiles as unmanaged byte-owned files.
-Value-free structural diagnostics established that `dev.config.toml` and
-`review.config.toml` contain only existing-only project-trust/TUI paths while
-all setup profile paths are release-only; the other two managed profiles are
-absent. No profile values were collected. This is the retained real-machine
-reproduction for the schema-6 structural-profile fix; installation and doctor
-remain pending publication and rerun.
+and install completed, doctor verified all 47 resources and the toolchain, and
+the managed launcher reported Codex CLI 0.154.0. The `dev` and `review` profiles
+started with their declared models. Initial rollback completed and restored the
+exact original launcher symlink target; a subsequent reinstall and doctor also
+completed successfully.
+
+Trying to trust the installed hooks from the `review` profile then failed before
+the trust write with `invalid transport in mcp_servers.playwright`. An isolated
+Codex 0.154.0 app-server reproduction confirmed that a profile-local MCP table
+containing only `enabled` or `args` cannot be validated independently, while the
+same table with a complete stdio transport can. No hook trust was applied. The
+profile fragments now carry complete standalone transports, and merge
+preparation rejects preserved incompatible or unsupported runtime fields
+before mutation; publication and a real-machine hook-trust rerun remain pending.
 
 ## Release-review evidence
 
@@ -126,15 +138,14 @@ Those findings were fixed with retained regressions before publication.
 
 - A real CachyOS AMD64 canary is required before using this setup as the primary
   local installation.
-- The macOS 14 and Arch AMD64 adapter jobs are green in CI run 35141985035, but
-  that run predates the schema-5 managed-config migration writer pass.
-- The real macOS migration canary has reproduced the profile collision without
-  mutation, but the schema-6 fix is not yet published or installed there. The
-  rerun must verify path-only dry-run output, preservation of existing-only
-  profile paths, combined launcher/config install and doctor, the managed
-  launcher version, displaced-config restoration, and byte-exact `readlink`
-  restoration after rollback or uninstall.
-- Hook trust through the interactive /hooks screen must be reviewed on each
+- The macOS 14 and Arch AMD64 adapter jobs are green in CI run 35244737726, but
+  that run predates this profile-transport hotfix.
+- The real macOS lifecycle canary passed combined migration dry-run, install,
+  doctor, profile launch, rollback with byte-exact launcher restoration,
+  reinstall, and a second doctor. Hook trust under `review` exposed the
+  incomplete profile-local MCP transport fixed by this candidate; the
+  interactive `/hooks` trust write must be rerun after publication.
+- Hook trust through the interactive `/hooks` screen must be reviewed on each
   machine after first install or a hook change.
 - The authenticated-browser profile was not exercised and no login state was
   created.

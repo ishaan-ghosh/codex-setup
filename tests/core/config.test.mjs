@@ -1,9 +1,82 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import test from "node:test";
 import {
 	deepEqual, mergeManaged, parseConfig, parseToml, removeManaged, restoreDisplacedValues,
 	stringifyToml, validateDisplacedValues, validateManagedContainers,
 } from "../../lib/config.mjs";
+
+test("profile-local MCP servers contain a complete standalone transport", async () => {
+	const profilesRoot = new URL("../../payload/profiles/", import.meta.url);
+	for (const filename of (await fs.readdir(profilesRoot)).filter((name) => name.endsWith(".config.toml"))) {
+		const profile = parseToml(await fs.readFile(new URL(filename, profilesRoot), "utf8"));
+		for (const [serverName, server] of Object.entries(profile.mcp_servers ?? {})) {
+			const hasCommand = typeof server.command === "string" && server.command.length > 0;
+			const hasUrl = typeof server.url === "string" && server.url.length > 0;
+			assert.equal(Number(hasCommand) + Number(hasUrl), 1, `${filename}:${serverName} must define exactly one MCP transport`);
+			if (hasCommand && server.args !== undefined) {
+				assert.ok(Array.isArray(server.args) && server.args.every((value) => typeof value === "string"), `${filename}:${serverName} has invalid stdio args`);
+			}
+		}
+	}
+});
+
+test("managed MCP transports reject incompatible or unsupported fields", () => {
+	const stdio = { mcp_servers: { playwright: { command: "codex-playwright-mcp", args: ["local-test"] } } };
+	for (const [field, value] of [
+		["url", "https://example.invalid/mcp"],
+		["bearer_token_env_var", "PRIVATE_TOKEN"],
+		["http_headers", { "X-Test": "value" }],
+		["env_http_headers", { "X-Test": "PRIVATE_HEADER" }],
+		["http_headers_helper", "private-helper"],
+		["auth", "oauth"],
+		["oauth", { client_id: "private-client" }],
+		["oauth_resource", "https://example.invalid/resource"],
+	]) {
+		assert.throws(
+			() => mergeManaged({ mcp_servers: { playwright: { [field]: value } } }, stdio, { migrateConflicts: true }),
+			new RegExp(`managed MCP transport conflicts at mcp_servers\\.playwright\\.${field}`),
+		);
+	}
+
+	const http = { mcp_servers: { playwright: { url: "https://example.invalid/mcp" } } };
+	for (const [field, value] of [
+		["command", "private-command"],
+		["args", ["private-arg"]],
+		["env", { PRIVATE: "value" }],
+		["env_vars", ["PRIVATE_TOKEN"]],
+		["cwd", "/private"],
+	]) {
+		assert.throws(
+			() => mergeManaged({ mcp_servers: { playwright: { [field]: value } } }, http),
+			new RegExp(`managed MCP transport conflicts at mcp_servers\\.playwright\\.${field}`),
+		);
+	}
+
+	for (const [field, value] of [
+		["bearer_token", "PRIVATE_TOKEN"],
+		["experimental_environment", "remote"],
+		["identity", { command: { executable: "private-command" } }],
+	]) {
+		for (const transport of [stdio, http]) {
+			assert.throws(
+				() => mergeManaged({ mcp_servers: { playwright: { [field]: value } } }, transport),
+				new RegExp(`managed MCP transport conflicts at mcp_servers\\.playwright\\.${field}`),
+			);
+			const fragment = structuredClone(transport);
+			fragment.mcp_servers.playwright[field] = value;
+			assert.throws(
+				() => mergeManaged({}, fragment),
+				new RegExp(`managed MCP transport conflicts at mcp_servers\\.playwright\\.${field}`),
+			);
+		}
+	}
+
+	for (const transport of [stdio, http]) {
+		const merged = mergeManaged({ mcp_servers: { playwright: { scopes: ["private-scope"] } } }, transport);
+		assert.deepEqual(merged.value.mcp_servers.playwright.scopes, ["private-scope"]);
+	}
+});
 
 test("TOML parsing and serialization are structural", () => {
 	const parsed = parseToml(`model = "gpt-5"\n\n[features]\nweb = true\nlist = ["a", "b"]\n`);

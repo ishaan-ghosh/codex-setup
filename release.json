@@ -108,7 +108,7 @@
       "target": "authenticated-browser.config.toml",
       "kind": "toml-merge",
       "mode": "0600",
-      "sha256": "d723f4894e7860339c4a78027adfe0f27adf15b51c868d7c0768566ab939b29e"
+      "sha256": "43563903d202e155e74e2fd20b8e95dd172fabdef1141afbe6f5b39082de817f"
     },
     {
       "source": "payload/profiles/dev-net.config.toml",
@@ -116,7 +116,7 @@
       "target": "dev-net.config.toml",
       "kind": "toml-merge",
       "mode": "0600",
-      "sha256": "7f9b2f3200e11fae254d3e6fb718290568071db9321b0ed52caf7dcb2ecd4440"
+      "sha256": "1e3564ca8f5831e7073336d9ea398e6c5f4b4809903c5fec1d47a610e3fefdc0"
     },
     {
       "source": "payload/profiles/dev.config.toml",
@@ -132,7 +132,7 @@
       "target": "review.config.toml",
       "kind": "toml-merge",
       "mode": "0600",
-      "sha256": "f8f7769834d6ef4b82974923f63dc1b37ea9508848998de0a4be75515bf85ac9"
+      "sha256": "4bf9c59d641ee7d0c925de9e3ce3675158b3dc5e684fa9e443c4cffa8d48858b"
     },
     {
       "source": "payload/skills/codex-audit-flow/references/audit-contract.md",

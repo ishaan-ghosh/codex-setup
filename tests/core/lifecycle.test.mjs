@@ -613,6 +613,73 @@ test("fresh install accepts semantically equal managed config but rejects differ
 	await assert.rejects(() => fs.stat(path.join(conflict.codexHome, ".codex-setup")), { code: "ENOENT" });
 });
 
+test("profile transport collisions fail before install or update mutation", async (t) => {
+	const stdioProfile = `[mcp_servers.playwright]\nenabled = false\ncommand = "codex-playwright-mcp"\nargs = ["local-test"]\n`;
+
+	await t.test("fresh install", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "review", stdioProfile);
+		const profilePath = path.join(h.codexHome, "review.config.toml");
+		const existing = `[mcp_servers.playwright]\nenabled = false\nurl = "https://example.invalid/mcp"\nauth = "oauth"\nscopes = ["private-scope"]\n`;
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, existing, { mode: 0o600 });
+
+		await assert.rejects(
+			() => h.lifecycle.install({ migrateManagedConfig: true }),
+			/managed MCP transport conflicts at mcp_servers\.playwright\.url, mcp_servers\.playwright\.auth/,
+		);
+		assert.equal(await fs.readFile(profilePath, "utf8"), existing);
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills", "managed", "SKILL.md")), { code: "ENOENT" });
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+	});
+
+	await t.test("reverse transport", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "review", `[mcp_servers.playwright]\nenabled = false\nurl = "https://example.invalid/mcp"\n`);
+		const profilePath = path.join(h.codexHome, "review.config.toml");
+		const existing = `[mcp_servers.playwright]\ncommand = "private-command"\nexperimental_environment = "remote"\n`;
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, existing, { mode: 0o600 });
+
+		await assert.rejects(
+			() => h.lifecycle.install(),
+			/managed MCP transport conflicts at mcp_servers\.playwright\.command, mcp_servers\.playwright\.experimental_environment/,
+		);
+		assert.equal(await fs.readFile(profilePath, "utf8"), existing);
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills", "managed", "SKILL.md")), { code: "ENOENT" });
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+	});
+
+	await t.test("update", async (t) => {
+		const h = await harness("1.0.0");
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "review", `[mcp_servers.playwright]\nenabled = false\n`);
+		const profilePath = path.join(h.codexHome, "review.config.toml");
+		const existing = `[mcp_servers.playwright]\nurl = "https://example.invalid/mcp"\n`;
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, existing, { mode: 0o600 });
+		await h.lifecycle.install();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const stateBefore = await fs.readFile(statePath);
+		const profileBefore = await fs.readFile(profilePath);
+		const skillBefore = await fs.readFile(path.join(h.codexHome, "skills", "managed", "SKILL.md"));
+
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await addProfile(next, "review", stdioProfile);
+		h.lifecycle.repoRoot = next.repo;
+		const toolchainB = toolchainIdentity("toolchain-b");
+		h.toolchain.add(toolchainB);
+		h.toolchain.current = structuredClone(toolchainB);
+		await assert.rejects(() => h.lifecycle.update(), /managed MCP transport conflicts at mcp_servers\.playwright\.url/);
+		assert.deepEqual(await fs.readFile(profilePath), profileBefore);
+		assert.deepEqual(await fs.readFile(statePath), stateBefore);
+		assert.deepEqual(await fs.readFile(path.join(h.codexHome, "skills", "managed", "SKILL.md")), skillBefore);
+	});
+});
+
 test("reserved config literal markers fail before lifecycle mutation", async (t) => {
 	await t.test("TOML profile", async (t) => {
 		const h = await harness();

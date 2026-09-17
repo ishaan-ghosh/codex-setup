@@ -115,6 +115,11 @@ Profile files follow the same fail-closed conflict rule as `config.toml`.
 Existing-only paths are preserved automatically; a different value at a
 setup-declared path still requires the explicit managed-config migration flag
 and remains subject to its strict non-executable allowlist.
+Profile-local MCP overrides include a complete standalone transport so Codex
+configuration writes, including hook trust, remain valid with any profile active.
+An existing server definition with incompatible transport or unsupported runtime
+fields is rejected before mutation instead of being combined into an invalid or
+ambiguous configuration.
 
 The base model is Astra at high reasoning. Plan mode can be raised to xhigh
 interactively. Context gathering defaults to Luna; complex implementation and

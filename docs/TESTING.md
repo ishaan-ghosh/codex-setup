@@ -27,9 +27,12 @@
    Profile contracts use Mac-shaped project-trust and TUI keys to verify
    value-free dry runs, unknown-key preservation, idempotence, initial rollback,
    uninstall, and schema-3 through schema-5 whole-file to schema-6 structural
-   transition. The transition tests also prove unrelated kind changes remain
-   rejected and that rollback fails before mutation when a post-transition
-   unknown key cannot be represented by the prior byte-owned state. Valid
+   transition. Every profile-local MCP server must also contain exactly one
+   complete standalone transport, so Codex configuration writes such as hook
+   trust remain valid when a profile is active. The transition tests also prove
+   unrelated kind changes remain rejected and that rollback fails before mutation
+   when a post-transition unknown key cannot be represented by the prior byte-owned
+   state. Valid
    signed 64-bit TOML integers beyond JavaScript's safe range and decimal floats
    such as signed zero or very large exponents retain their exact lexemes through
    profile lifecycle rewrites. Reserved internal-literal marker collisions in
@@ -37,6 +40,10 @@
    float, and large-integer markers round-trip through arrays and inline tables;
    malformed, out-of-range, and multiline markers are rejected. Empty managed
    roots, nested tables, and legacy transition inputs fail before mutation.
+   Incompatible stdio/HTTP transport fields and unsupported or version-gated
+   runtime fields also fail before install or update mutation, even when
+   managed-config migration is explicitly requested. Fields accepted by both
+   transports, including OAuth scopes in the pinned CLI, remain user-owned.
    Existing user-owned empty ancestors survive install, rollback, and uninstall;
    setup-created containers are recorded, pruned only when empty, and checked for
    missing or misplaced state metadata.
