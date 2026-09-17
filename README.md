@@ -40,6 +40,11 @@ cd codex-setup
 ~/.local/bin/codex --version
 ```
 
+`doctor` verifies a completed lifecycle installation; it is not a bootstrap
+check. If `install` stops at a migration or conflict gate, resolve that gate
+and rerun `install` successfully before running `doctor`. Until then, `doctor`
+reports that managed state is absent.
+
 Before running a release, compare the checked-out tag/commit and release
 checksums with the published release metadata. The installer verifies every
 download and managed file before promotion. Ensure `~/.local/bin` precedes any
@@ -96,6 +101,25 @@ settings, consistent with the top-level policy concepts in the official Codex
 configuration reference. MCP commands/arguments, `features.hooks`, and other
 executable- or credential-capable fields are never auto-migrated. Diagnostics
 print paths, not values; rollback and uninstall restore displaced values.
+
+The launcher and managed-config flags grant separate permissions. If an
+existing Codex launcher symlink and managed config conflicts are both present,
+combine the flags in the same dry-run and install:
+
+```sh
+./bin/codex-setup install --dry-run \
+  --migrate-codex-launcher \
+  --migrate-managed-config
+
+./bin/codex-setup install \
+  --migrate-codex-launcher \
+  --migrate-managed-config
+./bin/codex-setup doctor
+~/.local/bin/codex --version
+```
+
+Review every migrated path reported by the dry-run before continuing. Supplying
+only one migration flag does not authorize the other migration.
 
 ## Daily profiles
 
