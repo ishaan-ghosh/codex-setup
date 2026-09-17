@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	deepEqual, mergeManaged, parseConfig, parseToml, removeManaged, restoreDisplacedValues,
-	stringifyToml, validateDisplacedValues,
+	stringifyToml, validateDisplacedValues, validateManagedContainers,
 } from "../../lib/config.mjs";
 
 test("TOML parsing and serialization are structural", () => {
@@ -11,13 +11,84 @@ test("TOML parsing and serialization are structural", () => {
 	assert.deepEqual(parseToml(stringifyToml(parsed)), parsed);
 });
 
+test("TOML integers outside the JavaScript safe range retain their exact valid lexemes", () => {
+	const source = "positive = 9_007_199_254_740_993\nnegative = -9007199254740993\n";
+	const parsed = parseToml(source);
+	assert.equal(stringifyToml(parsed), source);
+	assert.deepEqual(parseToml(stringifyToml(parsed)), parsed);
+	assert.throws(() => parseToml("too_large = 9223372036854775808\n"), /signed 64-bit range/);
+	assert.throws(() => parseToml("too_small = -9223372036854775809\n"), /signed 64-bit range/);
+});
+
+test("the internal TOML literal marker is reserved and strictly validated", () => {
+	for (const source of [
+		'user = { "$tomlLiteral" = "true" }\n',
+		'user = { nested = { "$tomlLiteral" = "true" } }\n',
+		'user = [{ "$tomlLiteral" = "true" }]\n',
+		'["$tomlLiteral"]\nvalue = true\n',
+	]) {
+		assert.throws(() => parseToml(source), /reserved config key/);
+	}
+	assert.throws(
+		() => parseConfig("json-merge", '{"user":{"$tomlLiteral":"true"}}', "existing config"),
+		/not valid supported JSON/,
+	);
+
+	const nested = parseToml("values = [1979-05-27T07:32:00Z, 07:32:00, 9_007_199_254_740_993, -0.0, 1.0e999, 5e+22]\nmetadata = { when = 1979-05-27, count = -9007199254740993 }\n");
+	const rendered = stringifyToml(nested);
+	assert.deepEqual(parseToml(rendered), nested);
+	assert.match(rendered, /9_007_199_254_740_993/);
+	assert.match(rendered, /1979-05-27T07:32:00Z/);
+	assert.match(rendered, /-0\.0/);
+	assert.match(rendered, /1\.0e999/);
+	assert.match(rendered, /5e\+22/);
+
+	for (const marker of [
+		{ $tomlLiteral: "true" },
+		{ $tomlLiteral: "true\ninjected = true" },
+		{ $tomlLiteral: 42 },
+		{ $tomlLiteral: "1979-05-27", extra: true },
+		{ $tomlLiteral: "9_007__199_254_740_993" },
+		{ $tomlLiteral: "1979-99-99T99:99:99Z" },
+		{ $tomlLiteral: "23:59:60" },
+		{ $tomlLiteral: "1979-05-27T23:59:60" },
+		{ $tomlLiteral: "1979-05-27T23:59:60Z" },
+		{ $tomlLiteral: "1979-05-27T23:59:60+07:00" },
+	]) {
+		assert.throws(() => stringifyToml({ user: marker }), /invalid internal TOML literal marker/);
+	}
+	assert.throws(() => parseToml("invalid = 9_007__199_254_740_993\n"), /unsupported TOML value/);
+	assert.throws(() => parseToml("invalid = 1.0e9__9\n"), /unsupported TOML value/);
+	assert.throws(() => parseToml("invalid = 1979-99-99T99:99:99Z\n"), /unsupported TOML value/);
+	for (const value of ["23:59:60", "1979-05-27T23:59:60", "1979-05-27T23:59:60Z", "1979-05-27T23:59:60+07:00"]) {
+		assert.throws(() => parseToml(`invalid = ${value}\n`), /unsupported TOML value/);
+	}
+	assert.throws(() => parseToml("value = 9_007_199_254_740_993\n[value]\nnested = true\n"), /table conflicts with a value/);
+});
+
 test("managed merge preserves unknown values and fails closed on conflicts", () => {
-	const current = { model: "user-choice", features: { retained: true } };
+	const current = { model: "user-choice", features: { retained: true }, user_empty: {} };
 	const fragment = { features: { managed: true } };
 	const merged = mergeManaged(current, fragment, { allowEqual: false });
-	assert.deepEqual(merged.value, { model: "user-choice", features: { retained: true, managed: true } });
+	assert.deepEqual(merged.value, { model: "user-choice", features: { retained: true, managed: true }, user_empty: {} });
 	assert.deepEqual(removeManaged(merged.value, merged.paths), current);
 	assert.throws(() => mergeManaged(current, { model: "setup-choice" }), /conflicts with user value at model/);
+	assert.throws(() => mergeManaged(current, { managed_empty: {} }), /unrepresentable empty object at managed_empty/);
+	assert.throws(() => mergeManaged(current, { managed: { nested_empty: {} } }), /unrepresentable empty object at managed.nested_empty/);
+	assert.throws(() => mergeManaged(current, {}), /must contain at least one leaf/);
+});
+
+test("managed container ownership prunes only containers created by the merge", () => {
+	const fragment = { features: { memories: true } };
+	const created = mergeManaged({}, fragment);
+	assert.deepEqual(created.managedContainers, [["features"]]);
+	assert.deepEqual(removeManaged(created.value, created.paths, created.managedContainers), {});
+
+	const preexisting = mergeManaged({ features: {} }, fragment);
+	assert.deepEqual(preexisting.managedContainers, []);
+	assert.deepEqual(removeManaged(preexisting.value, preexisting.paths, preexisting.managedContainers), { features: {} });
+	assert.throws(() => validateManagedContainers([["unrelated"]], preexisting.paths), /without a managed descendant/);
+	assert.throws(() => validateManagedContainers([["features"], ["features"]], preexisting.paths), /duplicate path/);
 });
 
 test("TOML parser rejects ambiguous constructs rather than regex editing", () => {

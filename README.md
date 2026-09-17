@@ -49,6 +49,18 @@ other Codex installation on `PATH`. After first install or any hook change, open
 If `CODEX_HOME` already exists, it is respected. Otherwise Codex's default
 `~/.codex` is used. Existing unknown settings are preserved; conflicting
 managed settings stop for review instead of being overwritten.
+The four setup profiles are structural TOML merge targets, so pre-existing
+project trust entries, TUI state, and other undeclared profile settings survive
+install, rollback, update, and uninstall. Only paths declared by the matching
+`payload/profiles/*.config.toml` fragment become setup-owned.
+The supported structural syntax reserves the quoted key `$tomlLiteral` for its
+validated internal date/time, decimal-float, and large-integer representation;
+encountering that key in user TOML or JSON fails before lifecycle mutation.
+Empty tables remain valid when user-owned, but are rejected in setup-managed
+fragments or legacy whole-file transition inputs because they have no leaf path
+that the ownership record can represent. Schema 6 also records which non-empty
+table containers it created, so removal prunes only those containers when they
+become empty and preserves pre-existing user tables.
 
 `bootstrap` owns only the pinned setup runtime and Chromium installation. The
 lifecycle `install` command owns payload files and launchers. If
@@ -98,6 +110,11 @@ codex --profile review
 - `dev-net`: workspace-write with network enabled and isolated public browser
   research.
 - `review`: Sol at high reasoning, read-only, browser disabled.
+
+Profile files follow the same fail-closed conflict rule as `config.toml`.
+Existing-only paths are preserved automatically; a different value at a
+setup-declared path still requires the explicit managed-config migration flag
+and remains subject to its strict non-executable allowlist.
 
 The base model is Astra at high reasoning. Plan mode can be raised to xhigh
 interactively. Context gathering defaults to Luna; complex implementation and

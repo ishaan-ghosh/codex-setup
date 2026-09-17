@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { parseToml } from "../../lib/config.mjs";
 import { Lifecycle } from "../../lib/lifecycle.mjs";
 
 const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
@@ -94,6 +95,24 @@ async function addTomlMerge(h, version) {
 	await fs.writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`);
 }
 
+async function addProfile(h, name, contents, kind = "toml-merge") {
+	const relative = `profiles/${name}.config.toml`;
+	const source = `payload/${relative}`;
+	const bytes = Buffer.from(contents);
+	await fs.mkdir(path.join(h.repo, "payload", "profiles"), { recursive: true });
+	await fs.writeFile(path.join(h.repo, source), bytes);
+	const releasePath = path.join(h.repo, "release.json");
+	const release = JSON.parse(await fs.readFile(releasePath));
+	release.artifacts.push({
+		source,
+		target: `${name}.config.toml`,
+		sha256: digest(bytes),
+		kind,
+		mode: "0600",
+	});
+	await fs.writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`);
+}
+
 async function addLauncher(h, version, { first = false, target = "codex" } = {}) {
 	const contents = Buffer.from(`#!/bin/sh\necho managed-${version}\n`);
 	await fs.writeFile(path.join(h.repo, "payload", "codex"), contents);
@@ -140,7 +159,10 @@ function snapshotLinkText(snapshot) {
 
 function convertStateToLegacySchema(state, schema) {
 	state.schema = schema;
-	for (const resource of state.resources.filter((entry) => entry.kind !== "file")) delete resource.displacedValues;
+	for (const resource of state.resources.filter((entry) => entry.kind !== "file")) {
+		delete resource.managedContainers;
+		if (schema < 5) delete resource.displacedValues;
+	}
 	return state;
 }
 
@@ -320,6 +342,259 @@ test("update consumes the exact release from the selected checkout", async (t) =
 	assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup/state.json"))).version, "1.1.0");
 });
 
+test("schema-3 through schema-5 whole-file profiles transition safely to structural ownership", async (t) => {
+	for (const previousSchema of [3, 4, 5]) await t.test(`schema-${previousSchema} transition`, async (t) => {
+		const oldProfile = `approval_policy = "on-request"\nsandbox_mode = "workspace-write"\n`;
+		const h = await harness("1.0.0");
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", oldProfile, "file");
+		await h.lifecycle.install();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		let oldState = JSON.parse(await fs.readFile(statePath));
+		const oldTransactionPath = path.join(h.codexHome, ".codex-setup", "backups", oldState.lastTransaction, "transaction.json");
+		let oldTransaction = JSON.parse(await fs.readFile(oldTransactionPath));
+		convertStateToLegacySchema(oldState, previousSchema);
+		if (previousSchema === 3) oldTransaction = convertTransactionToSchema3(oldTransaction);
+		else {
+			oldTransaction.schema = previousSchema;
+			if (previousSchema === 4) {
+				for (const record of oldTransaction.resources.filter((entry) => entry.kind !== "file")) delete record.displacedValues;
+			}
+		}
+		await fs.writeFile(statePath, `${JSON.stringify(oldState)}\n`, { mode: 0o600 });
+		await fs.writeFile(oldTransactionPath, `${JSON.stringify(oldTransaction)}\n`, { mode: 0o600 });
+
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await addProfile(next, "dev", `${oldProfile}\n[sandbox_workspace_write]\nnetwork_access = false\n`);
+		h.lifecycle.repoRoot = next.repo;
+		const toolchainB = toolchainIdentity("toolchain-b");
+		h.toolchain.add(toolchainB);
+		h.toolchain.current = structuredClone(toolchainB);
+		await h.lifecycle.update();
+		let state = JSON.parse(await fs.readFile(statePath));
+		assert.equal(state.schema, 6);
+		const profile = state.resources.find((entry) => entry.target === "dev.config.toml");
+		assert.equal(profile.kind, "toml-merge");
+		assert.equal(profile.created, true);
+		const updateTransactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+		const updateTransaction = JSON.parse(await fs.readFile(updateTransactionPath));
+		const transition = updateTransaction.resources.find((entry) => entry.target === "dev.config.toml");
+		assert.equal(updateTransaction.schema, 6);
+		assert.equal(updateTransaction.previousState.schema, previousSchema);
+		assert.equal(transition.previousKind, "file");
+		assert.match(transition.backup, /^\d{4}\.bak$/);
+		const tamperedKind = structuredClone(updateTransaction);
+		tamperedKind.resources.find((entry) => entry.target === "dev.config.toml").previousKind = "json-merge";
+		await fs.writeFile(updateTransactionPath, `${JSON.stringify(tamperedKind)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /unsupported resource kind transition/);
+		const tamperedMode = structuredClone(updateTransaction);
+		tamperedMode.resources.find((entry) => entry.target === "dev.config.toml").beforeSnapshot.mode = 0o777;
+		await fs.writeFile(updateTransactionPath, `${JSON.stringify(tamperedMode)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.rollback(), /transition metadata does not match its states/);
+		assert.equal((await fs.stat(path.join(h.codexHome, "dev.config.toml"))).mode & 0o777, 0o600);
+		await fs.writeFile(updateTransactionPath, `${JSON.stringify(updateTransaction)}\n`, { mode: 0o600 });
+
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		const managedProfile = await fs.readFile(profilePath, "utf8");
+		await fs.appendFile(profilePath, "\n[local]\nadded_after_transition = true\n");
+		await assert.rejects(() => h.lifecycle.rollback(), /profile gained unmanaged values after representation transition/);
+		assert.equal(JSON.parse(await fs.readFile(statePath)).version, "1.1.0");
+		await fs.writeFile(profilePath, managedProfile, { mode: 0o600 });
+		await h.lifecycle.rollback();
+		assert.equal(await fs.readFile(profilePath, "utf8"), oldProfile);
+		state = JSON.parse(await fs.readFile(statePath));
+		assert.equal(state.schema, previousSchema);
+		assert.equal(state.resources.find((entry) => entry.target === "dev.config.toml").kind, "file");
+		assert.equal(await h.lifecycle.doctor(), 0);
+
+		h.toolchain.current = structuredClone(toolchainB);
+		await h.lifecycle.update();
+		await h.lifecycle.uninstall();
+		await assert.rejects(() => fs.stat(profilePath), { code: "ENOENT" });
+	});
+});
+
+test("resource kind transitions remain closed outside declared profile TOML", async (t) => {
+	const h = await harness("1.0.0");
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	await h.lifecycle.install();
+	const next = await harness("1.1.0");
+	t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+	const releasePath = path.join(next.repo, "release.json");
+	const release = JSON.parse(await fs.readFile(releasePath));
+	const changed = release.artifacts.find((entry) => entry.target === "skills/managed/SKILL.md");
+	changed.kind = "toml-merge";
+	changed.mode = "0600";
+	await fs.writeFile(releasePath, `${JSON.stringify(release, null, 2)}\n`);
+	h.lifecycle.repoRoot = next.repo;
+	await assert.rejects(() => h.lifecycle.update(), /resource kind changed across releases/);
+	assert.equal(await fs.readFile(path.join(h.codexHome, "skills/managed/SKILL.md"), "utf8"), "# managed 1.0.0\n");
+	assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json"))).version, "1.0.0");
+});
+
+test("empty tables remain user-owned and cannot enter managed ownership", async (t) => {
+	await t.test("managed profile fragment fails before initial mutation", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", "[managed_empty]\n");
+		await assert.rejects(() => h.lifecycle.install(), /unrepresentable empty object at managed_empty/);
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "dev.config.toml")), { code: "ENOENT" });
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills/managed/SKILL.md")), { code: "ENOENT" });
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+	});
+
+	await t.test("empty TOML and JSON fragment roots fail before initial mutation", async (t) => {
+		for (const kind of ["toml", "json"]) await t.test(kind, async (t) => {
+			const h = await harness();
+			t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+			if (kind === "toml") await addProfile(h, "dev", "");
+			else await setJsonMerge(h, {});
+			await assert.rejects(() => h.lifecycle.install(), /managed config must contain at least one leaf/);
+			await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+			await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills/managed/SKILL.md")), { code: "ENOENT" });
+		});
+	});
+
+	await t.test("legacy whole-file transition fails before update mutation", async (t) => {
+		const h = await harness("1.0.0");
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const oldProfile = "[legacy_empty]\n";
+		await addProfile(h, "dev", oldProfile, "file");
+		await h.lifecycle.install();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const legacyState = JSON.parse(await fs.readFile(statePath));
+		convertStateToLegacySchema(legacyState, 5);
+		await fs.writeFile(statePath, `${JSON.stringify(legacyState)}\n`, { mode: 0o600 });
+		const beforeState = await fs.readFile(statePath);
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		const beforeProfile = await fs.readFile(profilePath);
+
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await addProfile(next, "dev", 'approval_policy = "on-request"\n');
+		h.lifecycle.repoRoot = next.repo;
+		const toolchainB = toolchainIdentity("toolchain-b");
+		h.toolchain.add(toolchainB);
+		h.toolchain.current = structuredClone(toolchainB);
+		await assert.rejects(() => h.lifecycle.update(), /unrepresentable empty object at legacy_empty/);
+		assert.deepEqual(await fs.readFile(statePath), beforeState);
+		assert.deepEqual(await fs.readFile(profilePath), beforeProfile);
+		assert.equal(await fs.readFile(path.join(h.codexHome, "skills/managed/SKILL.md"), "utf8"), "# managed 1.0.0\n");
+	});
+
+	await t.test("empty legacy whole-file transition fails before update mutation", async (t) => {
+		const h = await harness("1.0.0");
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", "", "file");
+		await h.lifecycle.install();
+		const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+		const legacyState = convertStateToLegacySchema(JSON.parse(await fs.readFile(statePath)), 5);
+		await fs.writeFile(statePath, `${JSON.stringify(legacyState)}\n`, { mode: 0o600 });
+		const beforeState = await fs.readFile(statePath);
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		const beforeProfile = await fs.readFile(profilePath);
+
+		const next = await harness("1.1.0");
+		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
+		await addProfile(next, "dev", 'approval_policy = "on-request"\n');
+		h.lifecycle.repoRoot = next.repo;
+		const toolchainB = toolchainIdentity("toolchain-b-empty-root");
+		h.toolchain.add(toolchainB);
+		h.toolchain.current = structuredClone(toolchainB);
+		await assert.rejects(() => h.lifecycle.update(), /managed config must contain at least one leaf/);
+		assert.deepEqual(await fs.readFile(statePath), beforeState);
+		assert.deepEqual(await fs.readFile(profilePath), beforeProfile);
+	});
+
+	await t.test("existing user table survives install and uninstall", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", 'approval_policy = "on-request"\n');
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, "[user_empty]\n", { mode: 0o600 });
+		await h.lifecycle.install();
+		await h.lifecycle.uninstall();
+		assert.deepEqual(parseToml(await fs.readFile(profilePath, "utf8")), { user_empty: {} });
+	});
+});
+
+test("schema-6 container ownership preserves pre-existing ancestors and prunes only setup-created ones", async (t) => {
+	await t.test("pre-existing empty ancestor survives rollback and uninstall", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", "[features]\nmemories = true\n");
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, "[features]\n", { mode: 0o600 });
+		await h.lifecycle.install();
+		let state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup/state.json")));
+		assert.deepEqual(state.resources.find((entry) => entry.target === "dev.config.toml").managedContainers, []);
+		await h.lifecycle.rollback();
+		assert.deepEqual(parseToml(await fs.readFile(profilePath, "utf8")), { features: {} });
+
+		await h.lifecycle.install();
+		await h.lifecycle.uninstall();
+		assert.deepEqual(parseToml(await fs.readFile(profilePath, "utf8")), { features: {} });
+	});
+
+	await t.test("setup-created ancestor is recorded, validated, and removed", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", "[features]\nmemories = true\n");
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, "user_only = true\n", { mode: 0o600 });
+		await h.lifecycle.install();
+		const statePath = path.join(h.codexHome, ".codex-setup/state.json");
+		const state = JSON.parse(await fs.readFile(statePath));
+		const profile = state.resources.find((entry) => entry.target === "dev.config.toml");
+		assert.deepEqual(profile.managedContainers, [["features"]]);
+
+		const missing = structuredClone(state);
+		delete missing.resources.find((entry) => entry.target === "dev.config.toml").managedContainers;
+		await fs.writeFile(statePath, `${JSON.stringify(missing)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.doctor(), /missing config container metadata/);
+		const misplaced = structuredClone(state);
+		misplaced.resources.find((entry) => entry.target === "dev.config.toml").managedContainers = [["unrelated"]];
+		await fs.writeFile(statePath, `${JSON.stringify(misplaced)}\n`, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.doctor(), /without a managed descendant/);
+		await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+
+		await h.lifecycle.uninstall();
+		assert.deepEqual(parseToml(await fs.readFile(profilePath, "utf8")), { user_only: true });
+	});
+});
+
+test("profile lifecycle preserves accepted unknown float lexemes", async (t) => {
+	const h = await harness();
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	await addProfile(h, "dev", 'approval_policy = "on-request"\n');
+	const profilePath = path.join(h.codexHome, "dev.config.toml");
+	const existing = "negative_zero = -0.0\noverflow = 1.0e999\nexponent = 5e+22\n";
+	await fs.mkdir(h.codexHome, { recursive: true });
+	await fs.writeFile(profilePath, existing, { mode: 0o600 });
+
+	const assertFloats = async () => {
+		const contents = await fs.readFile(profilePath, "utf8");
+		assert.match(contents, /^negative_zero = -0\.0$/m);
+		assert.match(contents, /^overflow = 1\.0e999$/m);
+		assert.match(contents, /^exponent = 5e\+22$/m);
+		assert.doesNotMatch(contents, /Infinity/);
+	};
+
+	await h.lifecycle.install();
+	await assertFloats();
+	assert.equal(await h.lifecycle.doctor(), 0);
+	await h.lifecycle.rollback();
+	await assertFloats();
+
+	await h.lifecycle.install();
+	await h.lifecycle.uninstall();
+	await assertFloats();
+});
+
 
 test("fresh install accepts semantically equal managed config but rejects different values", async (t) => {
 	const equal = await harness();
@@ -336,6 +611,113 @@ test("fresh install accepts semantically equal managed config but rejects differ
 	await assert.rejects(() => conflict.lifecycle.install(), /managed config conflicts with user value/);
 	await assert.rejects(() => fs.stat(path.join(conflict.codexHome, "skills/managed/SKILL.md")), { code: "ENOENT" });
 	await assert.rejects(() => fs.stat(path.join(conflict.codexHome, ".codex-setup")), { code: "ENOENT" });
+});
+
+test("reserved config literal markers fail before lifecycle mutation", async (t) => {
+	await t.test("TOML profile", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		await addProfile(h, "dev", `approval_policy = "on-request"\n`);
+		const profilePath = path.join(h.codexHome, "dev.config.toml");
+		const original = `user = { nested = { "$tomlLiteral" = "true\\ninjected = true" } }\n`;
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(profilePath, original, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.install(), /not valid supported TOML/);
+		assert.equal(await fs.readFile(profilePath, "utf8"), original);
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills", "managed", "SKILL.md")), { code: "ENOENT" });
+	});
+
+	await t.test("JSON merge target", async (t) => {
+		const h = await harness();
+		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+		const configPath = path.join(h.codexHome, "config.json");
+		const original = '{"features":{"managed":"1.0.0"},"user":{"nested":{"$tomlLiteral":"true\\ninjected = true"}}}\n';
+		await fs.mkdir(h.codexHome, { recursive: true });
+		await fs.writeFile(configPath, original, { mode: 0o600 });
+		await assert.rejects(() => h.lifecycle.install(), /not valid supported JSON/);
+		assert.equal(await fs.readFile(configPath, "utf8"), original);
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+		await assert.rejects(() => fs.stat(path.join(h.codexHome, "skills", "managed", "SKILL.md")), { code: "ENOENT" });
+	});
+});
+
+test("profile TOML merges preserve Mac-shaped existing keys through rollback and uninstall", async (t) => {
+	const h = await harness();
+	t.after(() => fs.rm(h.root, { recursive: true, force: true }));
+	await addProfile(h, "dev", `approval_policy = "on-request"\nsandbox_mode = "workspace-write"\nmanaged_literals = [1979-05-27T07:32:00Z, 9_007_199_254_740_993]\n\n[sandbox_workspace_write]\nnetwork_access = false\n`);
+	await addProfile(h, "review", `model = "gpt-5.6-sol"\nmodel_reasoning_effort = "high"\napproval_policy = "on-request"\nsandbox_mode = "read-only"\n\n[mcp_servers.playwright]\nenabled = false\n`);
+	const privateValue = "PRIVATE_EXISTING_PROFILE_VALUE";
+	const existing = `user_only = 9_007_199_254_740_993\nuser_values = [1979-05-27T07:32:00Z, 07:32:00, 9_007_199_254_740_993]\nuser_metadata = { when = 1979-05-27, count = -9007199254740993 }\n\n[projects."/Users/example/Code/Personal/codex-setup"]\ntrust_level = "${privateValue}"\n\n[tui.model_availability_nux]\ngpt-5.6-sol = 1\ngpt-6-astra = 1\n`;
+	await fs.mkdir(h.codexHome, { recursive: true });
+	for (const name of ["dev", "review"]) {
+		await fs.writeFile(path.join(h.codexHome, `${name}.config.toml`), existing, { mode: 0o600 });
+	}
+
+	const dry = new Lifecycle({
+		repoRoot: h.repo,
+		codexHome: h.codexHome,
+		dataHome: h.dataHome,
+		userHome: h.home,
+		localBin: path.join(h.home, ".local", "bin"),
+		dryRun: true,
+		output: h.output,
+		toolchain: h.toolchain,
+	});
+	await dry.install();
+	assert.equal(await fs.readFile(path.join(h.codexHome, "dev.config.toml"), "utf8"), existing);
+	await assert.rejects(() => fs.stat(path.join(h.codexHome, ".codex-setup")), { code: "ENOENT" });
+
+	await h.lifecycle.install();
+	let dev = parseToml(await fs.readFile(path.join(h.codexHome, "dev.config.toml"), "utf8"));
+	let review = parseToml(await fs.readFile(path.join(h.codexHome, "review.config.toml"), "utf8"));
+	assert.equal(dev.projects["/Users/example/Code/Personal/codex-setup"].trust_level, privateValue);
+	assert.equal(dev.approval_policy, "on-request");
+	assert.equal(dev.sandbox_workspace_write.network_access, false);
+	assert.match(await fs.readFile(path.join(h.codexHome, "dev.config.toml"), "utf8"), /^managed_literals = \[1979-05-27T07:32:00Z, 9_007_199_254_740_993\]$/m);
+	assert.match(await fs.readFile(path.join(h.codexHome, "dev.config.toml"), "utf8"), /^user_only = 9_007_199_254_740_993$/m);
+	assert.equal(review.projects["/Users/example/Code/Personal/codex-setup"].trust_level, privateValue);
+	assert.equal(review.model, "gpt-5.6-sol");
+	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
+	let state = JSON.parse(await fs.readFile(statePath));
+	for (const resource of state.resources.filter((entry) => entry.target.endsWith(".config.toml"))) {
+		assert.equal(resource.kind, "toml-merge");
+		assert.equal(resource.created, false);
+		assert.equal(resource.managedPaths.some((entry) => entry.path[0] === "projects" || entry.path[0] === "tui"), false);
+	}
+	await assertValueNotRetained(path.join(h.codexHome, ".codex-setup"), privateValue);
+	const pristineState = structuredClone(state);
+	const devResource = state.resources.find((entry) => entry.target === "dev.config.toml");
+	devResource.managedPaths.find((entry) => entry.path.join(".") === "managed_literals").value[0].$tomlLiteral = "true\ninjected = true";
+	await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+	await assert.rejects(() => h.lifecycle.doctor(), /invalid internal TOML literal marker/);
+	await fs.writeFile(statePath, `${JSON.stringify(pristineState)}\n`, { mode: 0o600 });
+	state = pristineState;
+	const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
+	const transaction = JSON.parse(await fs.readFile(transactionPath));
+	const pristineTransaction = structuredClone(transaction);
+	transaction.resources.find((entry) => entry.target === "dev.config.toml").managedDelta
+		.find((entry) => entry.path.join(".") === "managed_literals").after.value[0].$tomlLiteral = "true\ninjected = true";
+	await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
+	await assert.rejects(() => h.lifecycle.rollback(), /invalid internal TOML literal marker/);
+	await fs.writeFile(transactionPath, `${JSON.stringify(pristineTransaction)}\n`, { mode: 0o600 });
+
+	await h.lifecycle.rollback();
+	for (const name of ["dev", "review"]) {
+		assert.deepEqual(parseToml(await fs.readFile(path.join(h.codexHome, `${name}.config.toml`), "utf8")), parseToml(existing));
+	}
+
+	await h.lifecycle.install();
+	await fs.appendFile(path.join(h.codexHome, "dev.config.toml"), `\n[local]\nadded_after_install = "${privateValue}"\n`);
+	await h.lifecycle.update();
+	await h.lifecycle.uninstall();
+	dev = parseToml(await fs.readFile(path.join(h.codexHome, "dev.config.toml"), "utf8"));
+	review = parseToml(await fs.readFile(path.join(h.codexHome, "review.config.toml"), "utf8"));
+	assert.deepEqual(Object.keys(dev).sort(), ["local", "projects", "tui", "user_metadata", "user_only", "user_values"]);
+	assert.equal(dev.local.added_after_install, privateValue);
+	assert.deepEqual(Object.keys(review).sort(), ["projects", "tui", "user_metadata", "user_only", "user_values"]);
+	assert.match(await fs.readFile(path.join(h.codexHome, "review.config.toml"), "utf8"), /^user_only = 9_007_199_254_740_993$/m);
+	await assertValueNotRetained(path.join(h.codexHome, ".codex-setup"), privateValue);
 });
 
 test("doctor reports managed mode drift without exposing contents", async (t) => {
@@ -662,7 +1044,7 @@ test("Codex launcher migration is explicit, private, and dry-run safe", async (t
 	assert.equal((await fs.lstat(launcher)).isFile(), true);
 	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 	const state = JSON.parse(await fs.readFile(statePath));
-	assert.equal(state.schema, 5);
+	assert.equal(state.schema, 6);
 	const resource = state.resources.find((entry) => entry.targetRoot === "local_bin" && entry.target === "codex");
 	assert.equal(snapshotLinkText(resource.displacedSymlink), privateTarget);
 	assert.equal((await fs.stat(statePath)).mode & 0o777, 0o600);
@@ -756,7 +1138,7 @@ test("launcher origin survives update, uninstall rollback, and repeated uninstal
 	h.lifecycle.repoRoot = next.repo;
 	await h.lifecycle.update();
 	let state = JSON.parse(await fs.readFile(path.join(h.codexHome, ".codex-setup", "state.json")));
-	assert.equal(state.schema, 5);
+	assert.equal(state.schema, 6);
 	assert.equal(snapshotLinkText(state.resources.find((entry) => entry.targetRoot === "local_bin" && entry.target === "codex").displacedSymlink), linkText);
 
 	await h.lifecycle.uninstall();
@@ -846,7 +1228,7 @@ test("schema-4 launcher metadata rejects drift and malformed combinations withou
 });
 
 test("schema-3 state and transactions remain readable and upgrade only after successful update", async (t) => {
-	await t.test("schema-3 previous state survives schema-5 update rollback", async (t) => {
+	await t.test("schema-3 previous state survives schema-6 update rollback", async (t) => {
 		const h = await harness("1.0.0");
 		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
 		await h.lifecycle.install();
@@ -861,7 +1243,7 @@ test("schema-3 state and transactions remain readable and upgrade only after suc
 		t.after(() => fs.rm(next.root, { recursive: true, force: true }));
 		h.lifecycle.repoRoot = next.repo;
 		await h.lifecycle.update();
-		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 6);
 		await h.lifecycle.rollback();
 		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 3);
 	});
@@ -881,8 +1263,8 @@ test("schema-3 state and transactions remain readable and upgrade only after suc
 	});
 });
 
-test("schema-4 state and transactions remain readable across schema-5 writes", async (t) => {
-	await t.test("schema-4 launcher state survives schema-5 update rollback", async (t) => {
+test("schema-4 state and transactions remain readable across schema-6 writes", async (t) => {
+	await t.test("schema-4 launcher state survives schema-6 update rollback", async (t) => {
 		const h = await harness("1.0.0");
 		t.after(() => fs.rm(h.root, { recursive: true, force: true }));
 		await addLauncher(h, "1.0.0", { first: true });
@@ -904,7 +1286,7 @@ test("schema-4 state and transactions remain readable across schema-5 writes", a
 		h.lifecycle.repoRoot = next.repo;
 		await h.lifecycle.update();
 		let state = JSON.parse(await fs.readFile(statePath));
-		assert.equal(state.schema, 5);
+		assert.equal(state.schema, 6);
 		assert.equal(snapshotLinkText(state.resources.find((entry) => entry.targetRoot === "local_bin").displacedSymlink), "../private/original-codex");
 		await h.lifecycle.rollback();
 		state = JSON.parse(await fs.readFile(statePath));
@@ -1491,13 +1873,13 @@ test("combined launcher and managed-config migration is dry-run safe and initial
 	assert.deepEqual(config, { model: "managed-model", unknown: "keep-only-live", features: { managed: true } });
 	const statePath = path.join(h.codexHome, ".codex-setup", "state.json");
 	const state = JSON.parse(await fs.readFile(statePath));
-	assert.equal(state.schema, 5);
+	assert.equal(state.schema, 6);
 	const mergeResource = state.resources.find((entry) => entry.target === "config.json");
 	assert.equal(mergeResource.displacedValues[0].value, privateModel);
 	assert.equal((await fs.stat(statePath)).mode & 0o777, 0o600);
 	const transactionPath = path.join(h.codexHome, ".codex-setup", "backups", state.lastTransaction, "transaction.json");
 	const transaction = JSON.parse(await fs.readFile(transactionPath));
-	assert.equal(transaction.schema, 5);
+	assert.equal(transaction.schema, 6);
 	assert.equal((await fs.stat(transactionPath)).mode & 0o777, 0o600);
 	assert.equal(JSON.stringify(state).includes("keep-only-live"), false);
 	assert.equal(JSON.stringify(transaction).includes("keep-only-live"), false);
@@ -1631,7 +2013,7 @@ test("schema-5 displaced config metadata fails closed on tamper and misplacement
 		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
 		await assert.rejects(() => h.lifecycle.rollback(), /omits carried displaced config metadata/);
 		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model-2");
-		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 6);
 	});
 
 	await t.test("intact predecessor rejects omission across active and current update metadata", async (t) => {
@@ -1653,7 +2035,7 @@ test("schema-5 displaced config metadata fails closed on tamper and misplacement
 		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
 		await assert.rejects(() => h.lifecycle.rollback(), /displaced managed config metadata does not match its action state/);
 		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model-2");
-		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 6);
 	});
 
 	await t.test("intact predecessor rejects legacy relabel across active and current update metadata", async (t) => {
@@ -1747,7 +2129,7 @@ test("schema-5 displaced config metadata fails closed on tamper and misplacement
 		await fs.writeFile(transactionPath, `${JSON.stringify(transaction)}\n`, { mode: 0o600 });
 		await assert.rejects(() => h.lifecycle.rollback(), /schema does not match its active state/);
 		assert.equal(JSON.parse(await fs.readFile(path.join(h.codexHome, "config.json"))).model, "managed-model");
-		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 5);
+		assert.equal(JSON.parse(await fs.readFile(statePath)).schema, 6);
 	});
 });
 

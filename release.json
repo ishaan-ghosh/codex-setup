@@ -106,6 +106,7 @@
       "source": "payload/profiles/authenticated-browser.config.toml",
       "target_root": "codex_home",
       "target": "authenticated-browser.config.toml",
+      "kind": "toml-merge",
       "mode": "0600",
       "sha256": "d723f4894e7860339c4a78027adfe0f27adf15b51c868d7c0768566ab939b29e"
     },
@@ -113,6 +114,7 @@
       "source": "payload/profiles/dev-net.config.toml",
       "target_root": "codex_home",
       "target": "dev-net.config.toml",
+      "kind": "toml-merge",
       "mode": "0600",
       "sha256": "7f9b2f3200e11fae254d3e6fb718290568071db9321b0ed52caf7dcb2ecd4440"
     },
@@ -120,6 +122,7 @@
       "source": "payload/profiles/dev.config.toml",
       "target_root": "codex_home",
       "target": "dev.config.toml",
+      "kind": "toml-merge",
       "mode": "0600",
       "sha256": "de0437c2350355252988244d12a09a40a8316829bf488d923c8fa4dcc53e54de"
     },
@@ -127,6 +130,7 @@
       "source": "payload/profiles/review.config.toml",
       "target_root": "codex_home",
       "target": "review.config.toml",
+      "kind": "toml-merge",
       "mode": "0600",
       "sha256": "f8f7769834d6ef4b82974923f63dc1b37ea9508848998de0a4be75515bf85ac9"
     },

@@ -45,6 +45,31 @@ hook commands.
 Diagnostics disclose path names only, and
 merge resources never retain a digest of the whole user document.
 
+Profile fragments are TOML merge resources. Fresh install never copies or
+backs up undeclared profile values; state and transactions retain only declared
+path deltas. Schema 6 has one bounded compatibility exception: while updating
+an exact-checksummed profile already owned as an ordinary file by schema 3-5
+state, the transition transaction retains those prior setup-owned bytes in its
+mode-`0600` transaction directory. The transition is accepted only for the
+fixed top-level profile source/target shape and never for an unmanaged profile
+or another resource-kind change. Rollback to the old byte-owned state rejects
+post-transition unknown keys rather than discarding them.
+
+Structural parsing reserves `$tomlLiteral` as an internal marker. User-authored
+TOML or JSON containing that key is rejected before payload or state writes.
+Internal marker objects must contain exactly one string field whose contents are
+a supported single-line date/time, decimal float, or signed 64-bit integer
+literal; carriage returns, line feeds, extra fields, and other lexical forms
+fail closed. Decimal floats retain their exact source lexemes, including signed
+zero and exponents outside JavaScript's finite-number range.
+Managed fragments and legacy whole-file transition inputs also reject empty
+tables/objects because leaf-path ownership cannot represent them. Empty tables
+that exist only in a user-owned document remain valid and are preserved.
+Schema-6 state records only the table containers created while adding managed
+leaves; removal prunes those recorded containers only after they become empty.
+Schema-3 through schema-5 state lacks that ownership metadata, so ambiguous
+empty ancestors are preserved conservatively during transition and removal.
+
 The transaction record is durably written before payload mutation and caught
 in-process failures attempt reverse-order payload and toolchain restoration.
 Non-dry-run update and uninstall preparation plus all mutating commit and

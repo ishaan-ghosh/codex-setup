@@ -24,6 +24,22 @@
    rejection, predecessor-lineage consistency, active/current-record omission
    and schema-relabel rejection, CLI scope, and non-migratable MCP
    command/argument and hook-enablement conflicts.
+   Profile contracts use Mac-shaped project-trust and TUI keys to verify
+   value-free dry runs, unknown-key preservation, idempotence, initial rollback,
+   uninstall, and schema-3 through schema-5 whole-file to schema-6 structural
+   transition. The transition tests also prove unrelated kind changes remain
+   rejected and that rollback fails before mutation when a post-transition
+   unknown key cannot be represented by the prior byte-owned state. Valid
+   signed 64-bit TOML integers beyond JavaScript's safe range and decimal floats
+   such as signed zero or very large exponents retain their exact lexemes through
+   profile lifecycle rewrites. Reserved internal-literal marker collisions in
+   TOML and JSON fail before mutation, while validated generated date/time,
+   float, and large-integer markers round-trip through arrays and inline tables;
+   malformed, out-of-range, and multiline markers are rejected. Empty managed
+   roots, nested tables, and legacy transition inputs fail before mutation.
+   Existing user-owned empty ancestors survive install, rollback, and uninstall;
+   setup-created containers are recorded, pruned only when empty, and checked for
+   missing or misplaced state metadata.
 3. Toolchain tests verify exact Node, Codex, Playwright MCP, and Chromium
    identities without changing the host toolchain. Executed regressions tamper
    with runtime, package, and platform-native Codex executables and prove
@@ -76,6 +92,10 @@ its exact raw link-target bytes privately, run migration dry-run, install with
 `--migrate-codex-launcher`, run doctor and the managed launcher version check,
 then exercise uninstall or initial rollback and confirm `readlink` returns the exact original bytes. This real-home canary remains required even when the
 isolated cross-platform regression suite is green.
+
+The same canary must retain pre-existing `dev.config.toml` and
+`review.config.toml` project-trust/TUI paths while adding only the declared
+profile paths. Reports list paths and outcomes, never profile values.
 
 ## CachyOS first-use canary
 

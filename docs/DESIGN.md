@@ -22,8 +22,13 @@ exact raw target bytes, byte length, and digest; it is carried through updates
 until restored by manifest removal or uninstall. Schema 5 adds typed, bounded,
 per-value length/SHA-256 metadata only for explicitly displaced allowlisted
 scalar config paths. It never retains a whole config document, its digest, or
-unknown keys. Schema-3 and schema-4 state and transactions remain
-readable and upgrade only when a later update commits successfully.
+unknown keys. Schema 6 adds a narrowly scoped representation transition from an
+exact-checksummed, setup-owned top-level `*.config.toml` file to structural TOML
+ownership. It also records which table containers were created to hold managed
+leaves, allowing removal to prune only those containers after they become empty.
+Schema-3 through schema-5 state and transactions remain readable and upgrade
+only when a later update commits successfully; absent legacy container metadata
+is interpreted conservatively and does not authorize ancestor pruning.
 Rollback also cross-checks an embedded previous state against its retained
 predecessor transaction. This detects omission or legacy relabeling when the
 predecessor remains intact; it is a consistency check, not authentication.
@@ -81,10 +86,24 @@ restores a recorded migrated launcher link after verifying the managed wrapper.
 untouched. The setup owns only the keys declared in `payload/config/managed.toml`.
 Transaction records for JSON/TOML merge targets store only managed-path
 before/after presence and declared values plus file-level mode and creation
-metadata. They never retain whole merged bytes or unknown user values, so
+metadata. Active schema-6 state additionally stores setup-created container
+paths; rollback uses the active and previous states' respective container
+ownership. They never retain whole merged bytes or unknown user values, so
 rollback reverses managed paths against the current document rather than
 overwriting unrelated edits. Profiles are separate top-level
-`*.config.toml` files, matching current Codex profile behavior.
+`*.config.toml` files, matching current Codex profile behavior, and are TOML
+merge targets rather than byte-owned files. Existing-only project trust, TUI,
+and other local paths remain outside setup ownership.
+
+An update from the pre-schema-6 whole-file profile representation is permitted
+only for a declared `payload/profiles/<name>.config.toml` target whose live
+bytes and mode still match its prior state. The transition transaction retains
+that already-owned file as a mode-`0600` rollback backup and records the new
+managed-path delta. It never backs up an unmanaged fresh-install profile. A
+rollback to the old whole-file state fails closed if user-only paths were added
+after the representation transition, because the old state cannot represent
+those paths without silently discarding them. Uninstall under the new state
+removes only declared profile paths and preserves later unknown edits.
 
 Global `AGENTS.md` stays concise. Detailed workflows live in namespaced skills.
 Repositories retain authority through their nearest `AGENTS.md`, contribution

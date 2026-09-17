@@ -42,14 +42,41 @@ rejects multiline strings, multiline arrays, and arrays of tables instead of
 editing a syntax it cannot prove safe.
 
 State and transaction backups live under `$CODEX_HOME/.codex-setup`.
-Byte-owned file resources store their installed SHA-256 and mode; merge
-resources store their managed paths and mode. State and transactions also bind
+Byte-owned file resources store their installed SHA-256 and mode; schema-6 merge
+resources store their managed paths, setup-created container paths, and mode.
+State and transactions also bind
 the release to a validated toolchain receipt and executable checksum inventory.
 Schema 4 introduced typed missing/file/symlink transaction snapshots. Schema 5
 adds bounded typed displaced-value metadata for explicitly migrated config
 leaves. Each entry carries canonical byte length and SHA-256 integrity data;
 whole config bytes/digests and unknown keys are never retained. Schema-3 and
-schema-4 read/rollback/update compatibility remains strict.
+schema-4 read/rollback/update compatibility remains strict. Schema 6 makes the
+four top-level profile files structural TOML merge resources and permits only
+their exact-checksummed prior whole-file representation to transition during
+update. That compatibility transaction may retain the prior already-owned
+profile bytes. Fresh undeclared profile values and whole profile documents are
+never backed up; explicitly migrated allowlisted conflicts retain only their
+bounded displaced scalar values under the schema-5 contract.
+
+Profile merge targets preserve undeclared paths, including project trust and
+TUI state. Rollback and uninstall remove only declared managed paths, then prune
+only recorded setup-created containers that are empty. Pre-existing containers,
+including empty ones, remain user-owned. Legacy schema-3 through schema-5 state
+has no container ownership metadata and therefore preserves ambiguous ancestors
+conservatively. A rollback
+across the schema-6 representation transition fails closed if unknown paths were
+added afterward, because restoring the prior byte-owned state would otherwise
+discard them.
+
+`$tomlLiteral` is reserved by the structural parser for validated internal
+single-line date/time, decimal-float, and signed 64-bit integer literals.
+User-authored TOML or JSON using that key, and malformed internal marker
+metadata, fail before lifecycle mutation. Decimal floats retain their exact
+lexemes rather than passing through JavaScript numeric conversion.
+Managed fragments and whole-file profile transition inputs reject empty
+roots or nested tables/objects because they own no leaf. Non-empty fragments
+record any containers created for their leaves; existing user-owned empty tables
+remain preserved.
 
 A fresh `install --migrate-codex-launcher` may replace only an existing
 `local_bin:codex` leaf symlink. It records bounded base64 of the exact raw

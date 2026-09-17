@@ -25,7 +25,9 @@ function destination(relative) {
 	if (relative === "hooks/hooks.json") return { target_root: "codex_home", target: "hooks.json", kind: "json-merge", mode: "0600" };
 	if (relative === "hooks/read-policy.mjs") return { target_root: "codex_home", target: "hooks/codex-setup-read-policy.mjs", mode: "0644" };
 	if (relative.startsWith("agents/") && relative.endsWith(".toml")) return { target_root: "codex_home", target: relative, mode: "0644" };
-	if (relative.startsWith("profiles/") && relative.endsWith(".config.toml")) return { target_root: "codex_home", target: path.posix.basename(relative), mode: "0600" };
+	if (relative.startsWith("profiles/") && relative.endsWith(".config.toml")) {
+		return { target_root: "codex_home", target: path.posix.basename(relative), kind: "toml-merge", mode: "0600" };
+	}
 	if (relative.startsWith("bin/")) return { target_root: "local_bin", target: path.posix.basename(relative), mode: "0755" };
 	if (relative.startsWith("skills/")) return { target_root: "user_home", target: `.agents/${relative}`, mode: "0644" };
 	if (relative.endsWith(".test.mjs")) return null;
