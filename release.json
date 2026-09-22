@@ -7,56 +7,56 @@
       "target_root": "codex_home",
       "target": "agents/audit_verifier.toml",
       "mode": "0644",
-      "sha256": "49741f4abc8d105b036a9586d2010de38a696b07f5ccb96c7258e0e5ee788303"
+      "sha256": "50e8941b79fb16a62596b3940e0476d6523bb92ed25f6be0849ebc9b6d569e69"
     },
     {
       "source": "payload/agents/complex_worker.toml",
       "target_root": "codex_home",
       "target": "agents/complex_worker.toml",
       "mode": "0644",
-      "sha256": "ed129f5c603e42d7061a6cf29c3ccfc9bbbe05bc3ea6b91a2af97df31595004c"
+      "sha256": "c12635825e0c0475729c3e818f646ffb756cfccbf6d7800e244e17b70aa34d6b"
     },
     {
       "source": "payload/agents/github_researcher.toml",
       "target_root": "codex_home",
       "target": "agents/github_researcher.toml",
       "mode": "0644",
-      "sha256": "8fb00a52ff70c2cedb239eac312258552d464a012861bb4685af5d357f9d3b25"
+      "sha256": "23906cf02dffcf97af589f46db2f0d7348b9dba0e9961eefafdb1513136533ef"
     },
     {
       "source": "payload/agents/mechanical_worker.toml",
       "target_root": "codex_home",
       "target": "agents/mechanical_worker.toml",
       "mode": "0644",
-      "sha256": "71a39b708e04b533615741ffdbde57a325f82a3cf0fd5a50ad54497ed45aa794"
+      "sha256": "93bb6fc2d04dd67260fa7e966cf677a3fba38483853cf03dce1a3d80b7586c4f"
     },
     {
       "source": "payload/agents/repo_explorer.toml",
       "target_root": "codex_home",
       "target": "agents/repo_explorer.toml",
       "mode": "0644",
-      "sha256": "6942a5376beb2fbb9784dd33309e1ea3b56ef23e0d8abb334a76000931ce06af"
+      "sha256": "58cecc5f080148ca48e293f1a135e4a3abba4ca43c4932ad531c279e7b855b64"
     },
     {
       "source": "payload/agents/reviewer.toml",
       "target_root": "codex_home",
       "target": "agents/reviewer.toml",
       "mode": "0644",
-      "sha256": "065aa8d1a09fbae3b4d3ef2e6b721030a7ff4557ef65b60cd44507e1880bcc57"
+      "sha256": "554ed0bed45336707e7ee2e11f9bfd1a4c7c067d33592f1b32af69d847e5e4fd"
     },
     {
       "source": "payload/agents/web_researcher.toml",
       "target_root": "codex_home",
       "target": "agents/web_researcher.toml",
       "mode": "0644",
-      "sha256": "43a17fd4277b55b2ea84cde7fc2cd0be7a11163b830734c934045da521e5c670"
+      "sha256": "f318b6ff9e91ac80eb3b1707142d5a4f57a01dc9218d2bad6c8a4bb66e7bea74"
     },
     {
       "source": "payload/AGENTS.md",
       "target_root": "codex_home",
       "target": "AGENTS.md",
       "mode": "0644",
-      "sha256": "f08cdd59d7898a393fdbc5a9686f2aad5c3aeec7c0aa61d9d0db94705feb826d"
+      "sha256": "93bd1ad189f717400e9a114445394895bb96fb7f9fe3b277efebd389bd2bfdc7"
     },
     {
       "source": "payload/bin/codex",
@@ -85,7 +85,7 @@
       "target": "config.toml",
       "kind": "toml-merge",
       "mode": "0600",
-      "sha256": "aae9e75dae07b97cc5409d6d20b84c45ff93fac16e81301193374407d26c63fc"
+      "sha256": "7e3a222648ca2e35d7ed1afc585fa2df3f46b8db836e3d225a3a58afd0019d83"
     },
     {
       "source": "payload/hooks/hooks.json",
@@ -132,7 +132,7 @@
       "target": "review.config.toml",
       "kind": "toml-merge",
       "mode": "0600",
-      "sha256": "4bf9c59d641ee7d0c925de9e3ce3675158b3dc5e684fa9e443c4cffa8d48858b"
+      "sha256": "8e29d7c0597887698fc2b6ee154f939411176ea2c44106b2c8e7857d7c105403"
     },
     {
       "source": "payload/skills/codex-audit-flow/references/audit-contract.md",

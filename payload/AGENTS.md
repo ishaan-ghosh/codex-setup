@@ -32,6 +32,10 @@ or repository-boundary decisions; ask one focused question with a recommendation
   handoff. Luna subagents handle bounded context gathering, repository
   exploration, and mechanical work. Sol handles reviews and adversarial
   verification; give each only the context needed for its role.
+- Model IDs and reasoning settings are configured in Codex TOML, including each
+  custom agent definition. Repository instructions guide role selection but do
+  not rewrite those settings; honor the selected role's configured model and
+  surface conflicts with repository-requested routing.
 - Reviewers and verifiers are read-only for application code. A writer/worker
   starts only after the user accepts findings and the requested write scope.
 

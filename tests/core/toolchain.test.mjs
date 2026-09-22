@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { codexNativeSpec, ToolchainInstaller, toolchainReleaseId } from "../../lib/toolchain-installer.mjs";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+const codexVersion = JSON.parse(await fs.readFile(path.join(repoRoot, "component-lock.json"))).components.codex.version;
 const nativePlatform = {
 	"darwin-arm64": "darwin-arm64",
 	"linux-x64": "linux-x64",
@@ -208,7 +209,7 @@ function nativeExecutable(fixture = nativeCodexFixture) {
 	return `app/node_modules/${fixture.package}/vendor/${fixture.target}/bin/codex`;
 }
 
-async function fakeInstallHarness(t, { installNative = true, versionOutput = "codex-cli 0.154.0\n" } = {}) {
+async function fakeInstallHarness(t, { installNative = true, versionOutput = `codex-cli ${codexVersion}\n` } = {}) {
 	const root = await testTempDirectory("codex-toolchain-optional-");
 	t.after(() => fs.rm(root, { recursive: true, force: true }));
 	const repo = path.join(root, "repo");
@@ -247,7 +248,7 @@ async function fakeInstallHarness(t, { installNative = true, versionOutput = "co
 			if (installNative) {
 				await writeFixture(release, `app/node_modules/${nativeCodexFixture.package}/package.json`, JSON.stringify({
 					name: "@openai/codex",
-					version: `0.154.0-${nativeCodexFixture.platform}`,
+					version: `${codexVersion}-${nativeCodexFixture.platform}`,
 				}));
 				await writeFixture(release, nativeExecutable(), "synthetic native codex", 0o755);
 			}
@@ -327,7 +328,7 @@ test("receipt validation rejects missing and tampered native Codex executables",
 	}
 	await fs.writeFile(path.join(release, "app", "node_modules", nativeCodexFixture.package, "package.json"), JSON.stringify({
 		name: "@openai/codex",
-		version: `0.154.0-${nativeCodexFixture.platform}`,
+		version: `${codexVersion}-${nativeCodexFixture.platform}`,
 	}));
 	const packageLock = await fs.readFile(path.join(repoRoot, "toolchain/package-lock.json"));
 	await fs.writeFile(path.join(release, "app", "package-lock.json"), packageLock);

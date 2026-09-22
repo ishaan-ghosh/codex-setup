@@ -145,9 +145,38 @@ An existing server definition with incompatible transport or unsupported runtime
 fields is rejected before mutation instead of being combined into an invalid or
 ambiguous configuration.
 
-The base model is Astra at high reasoning. Plan mode can be raised to xhigh
-interactively. Context gathering defaults to Luna; complex implementation and
-all formal review roles use Sol. The setup caps concurrent subagents at three.
+The base model is `gpt-6-astra` at high reasoning. Plan mode can be raised to
+xhigh interactively. Context gathering and mechanical work use `gpt-6-luna` at
+medium reasoning; complex implementation and all formal review roles use
+`gpt-6-sol` at high reasoning. The setup caps concurrent subagents at three.
+
+### Where model selection comes from
+
+Model IDs are explicitly pinned in the setup payload:
+
+- `payload/config/managed.toml`: parent model, review model, and subagent defaults.
+- `payload/profiles/review.config.toml`: the review session model.
+- `payload/agents/*.toml`: each custom agent's model and reasoning effort.
+
+The installer does not derive these values from a repository's `AGENTS.md`.
+Repository instructions guide workflow and role selection, but prose does not
+rewrite the model configured for a role. Development skills refer to Sol/Luna
+roles; the audit skill records the actual model used by each reviewer.
+
+For subagents, an explicit model in the selected custom agent's TOML takes
+precedence over spawn arguments and `[agents]` defaults. Without that agent-file
+setting, resolution uses the explicit spawn value, then `[agents]` defaults,
+then the parent. Configure repository-specific agents in `.codex/agents/*.toml`
+and repository defaults in `.codex/config.toml`; changing only the default does
+not replace an explicit custom-agent model. See the
+[official subagent configuration documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+
+After updating this checkout, run `./bin/bootstrap` to select its pinned CLI,
+then `./bin/codex-setup update --dry-run`. Review the managed changes, then run
+`./bin/codex-setup update` and
+`./bin/codex-setup doctor` to apply and check an existing installation. Start a
+new Codex session to load the updated configuration. Editing the payload alone
+does not update an installed environment or an already-running session.
 
 ## Browser modes
 
@@ -174,6 +203,37 @@ its own `@playwright/test` version and configuration. To verify the setup-owned
 MCP against a local fixture after bootstrap, run `npm run test:browser`.
 
 ## Lifecycle
+
+### Updating the managed Codex CLI
+
+This checkout pins Codex CLI **0.156.0**. `~/.local/bin/codex` launches the
+setup-owned toolchain, so rerunning bootstrap installs or reuses the version
+declared by this checkout; it does not discover the latest npm release.
+`codex-setup update` applies the reviewed payload and records that toolchain.
+
+If `codex update` reports success but `codex --version` is unchanged, run
+`type -a codex` and check each executable with `--version`. Another npm or
+standalone installation can coexist with the setup launcher; updating that
+copy does not change the setup-owned binary.
+
+To apply this checkout's CLI and model configuration to an existing setup:
+
+```sh
+cd /path/to/reviewed/codex-setup
+./bin/bootstrap
+./bin/codex-setup update --dry-run
+./bin/codex-setup update
+./bin/codex-setup doctor
+~/.local/bin/codex --version
+```
+
+Start a new Codex session afterward. Future CLI upgrades must update the Codex
+version and integrity in `component-lock.json`, its exact dependency in
+`toolchain/package.json`, and `toolchain/package-lock.json`, then pass
+`npm run check` before bootstrap applies them. Avoid updating packages directly
+inside a setup-owned toolchain: its checksum receipt would no longer match.
+
+### Release lifecycle and rollback
 
 ```sh
 ./bin/codex-setup doctor
