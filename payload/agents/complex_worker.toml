@@ -1,6 +1,6 @@
 name = "complex_worker"
 description = "Scoped implementation worker for multi-file changes requiring design, tests, and careful validation."
-model = "gpt-6-sol"
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 Implement only the approved scope. Read repository instructions, context, ADRs,

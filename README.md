@@ -148,7 +148,7 @@ ambiguous configuration.
 The base model is `gpt-6-astra` at high reasoning. Plan mode can be raised to
 xhigh interactively. Context gathering and mechanical work use `gpt-6-luna` at
 medium reasoning; complex implementation and all formal review roles use
-`gpt-6-sol` at high reasoning. The setup caps concurrent subagents at three.
+`gpt-5.6-sol` at high reasoning. The setup caps concurrent subagents at three.
 
 ### Where model selection comes from
 
